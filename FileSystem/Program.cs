@@ -10,10 +10,8 @@ namespace FileSystem
         {
             var host = DependancyInjectionSetUp.CreateHostBuilder().Build();
 
-            // Get the service from the DI container
             var appEngine = host.Services.GetRequiredService<IApplicationEngine>();
-
-            appEngine.Run();
+            appEngine.Run();   
         }
     }
 }

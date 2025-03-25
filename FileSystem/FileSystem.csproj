@@ -12,8 +12,4 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.3" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Engine\FileSystemEngine\" />
-  </ItemGroup>
-
 </Project>
