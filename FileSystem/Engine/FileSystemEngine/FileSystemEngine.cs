@@ -1,6 +1,6 @@
 ﻿using FileSystem.Constants;
 using FileSystem.Engine.FileSystemEngine.ContainerElements;
-using static System.Runtime.InteropServices.JavaScript.JSType;
+using System.Text;
 
 namespace FileSystem.Engine.FileSystemEngine
 {
@@ -18,15 +18,8 @@ namespace FileSystem.Engine.FileSystemEngine
         private Folder _currentDir;
         private uint _nextAvailableBlockId;
 
-        //BAT
-        private uint _batStartBlockId;
-        private uint _batBlockCount;
-        private uint _entriesPerBatBlock;
-
         public FileSystemEngine()
         {
-            _entriesPerBatBlock = (FileSystemConstants.BlockSize - BlockInfo.ChecksumLength )/ sizeof(uint);
-
             if (File.Exists(FileSystemConstants.ContainerPath))
                 // Open the file system.
                 OpenContainer();
@@ -42,8 +35,6 @@ namespace FileSystem.Engine.FileSystemEngine
         {
             _containerStream = new FileStream(FileSystemConstants.ContainerPath, FileMode.Create, FileAccess.ReadWrite);
 
-            InitializeBAT();
-
             WriteHeader();
         }
 
@@ -53,21 +44,6 @@ namespace FileSystem.Engine.FileSystemEngine
         private void OpenContainer()
         {
             throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// Initializes the block association table.
-        /// </summary>
-        private void InitializeBAT()
-        {
-            _batStartBlockId = 1;
-            _batBlockCount = 1;
-            _nextAvailableBlockId = _batStartBlockId + _batBlockCount;
-
-            long offset = CalculateBlockOffset(_batStartBlockId);
-            _containerStream.Seek(offset, SeekOrigin.Begin);
-
-            
         }
 
         /// <summary>
@@ -94,9 +70,6 @@ namespace FileSystem.Engine.FileSystemEngine
                 writer.Write(FileSystemConstants.BlockSize);
                 writer.Write(FileSystemConstants.HeaderSize);
                 writer.Write(_nextAvailableBlockId);
-                writer.Write(_batStartBlockId);
-                writer.Write(_batBlockCount);
-                writer.Write(_entriesPerBatBlock);
             }
 
             CalculateHeaderChecksum();

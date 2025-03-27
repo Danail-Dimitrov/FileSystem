@@ -6,7 +6,7 @@
     public struct BlockInfo
     {
         public const int ChecksumLength = 16;
-        public byte[] _checksum;
+        private byte[] _checksum;
 
         public uint BlockId;
         public bool IsUsed;
