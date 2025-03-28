@@ -6,7 +6,7 @@
         public string Name { get; set; }
         public DateTime CreationTime { get; set; }
         public uint FirstBlockId { get; set; }
-        // THe block of the parent directory
+        // The block of the parent directory
         public uint ParentBlockId { get; set; }
         // Only for files
         public uint Size { get; set; }

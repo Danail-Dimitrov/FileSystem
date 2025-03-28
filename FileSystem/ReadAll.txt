@@ -1,0 +1,81 @@
+﻿/// <summary>
+        /// Writes the content of the container in the console.
+        /// </summary>
+        private void WriteContainerContnet()
+        {
+            Console.WriteLine("Container Content:");
+
+            // Read and display header information
+            _containerStream.Seek(0, SeekOrigin.Begin);
+
+            using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
+            {
+                // Read header values
+                uint magicNumber = reader.ReadUInt32();
+                ushort version = reader.ReadUInt16();
+                uint blockSize = reader.ReadUInt32();
+                uint headerSize = reader.ReadUInt32();
+                uint nextAvailableBlock = reader.ReadUInt32();
+
+                // Display header information
+                Console.WriteLine("Header Information:");
+                Console.WriteLine($"  Magic Number: 0x{magicNumber:X8}");
+                Console.WriteLine($"  Version: {version}");
+                Console.WriteLine($"  Block Size: {blockSize} bytes");
+                Console.WriteLine($"  Header Size: {headerSize} bytes");
+                Console.WriteLine($"  Next Available Block ID: {nextAvailableBlock}");
+
+                Console.WriteLine();
+
+                // Display root directory information if available
+                if (_rootDirectory != null)
+                {
+                    Console.WriteLine("\nRoot Directory Information:");
+                    Console.WriteLine($"  First Block ID: {_rootDirectory.FirstBlockId}");
+                    Console.WriteLine($"  Creation Time: {_rootDirectory.CreationTime}");
+                    Console.WriteLine($"  Is Folder: {_rootDirectory.IsFolder}");
+                    Console.WriteLine($"  Children Count: {_rootDirectory.ChildrenCount}");
+
+                    // Read and display current blocks in use
+                    Console.WriteLine("\nAllocated Blocks:");
+
+                    for (uint j = 1; j < nextAvailableBlock; j++)
+                    {
+                        try
+                        {
+                            long blockOffset = CalculateBlockOffset(j);
+                            _containerStream.Seek(blockOffset, SeekOrigin.Begin);
+
+                            uint blockId = reader.ReadUInt32();
+                            byte status = reader.ReadByte();
+                            uint nextBlock = reader.ReadUInt32();
+                            uint dataLength = reader.ReadUInt32();
+
+                            if (status == 1) // Block is in use
+                            {
+                                Console.WriteLine($"  Block {blockId}:");
+                                Console.WriteLine($"    Status: Used");
+                                Console.WriteLine($"    Next Block: {nextBlock}");
+                                Console.WriteLine($"    Data Length: {dataLength} bytes");
+
+                                // If this is root directory block, try to read element info
+                                if (blockId == _rootDirectory.FirstBlockId)
+                                {
+                                    string name = reader.ReadString();
+                                    DateTime createTime = DateTime.FromBinary(reader.ReadInt64());
+                                    Console.WriteLine($"    Name: {name}");
+                                    Console.WriteLine($"    Creation Time: {createTime}");
+                                }
+                            }
+
+                            Console.ReadLine();
+                        }
+                        catch
+                        {
+                            // Skip if we can't read this block
+                            Console.WriteLine($"  Block {j}: Failed to read");
+                        }
+                    }
+                }
+            }
+        }

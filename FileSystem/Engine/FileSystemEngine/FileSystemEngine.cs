@@ -1,5 +1,6 @@
 ﻿using FileSystem.Constants;
 using FileSystem.Engine.FileSystemEngine.ContainerElements;
+using System.Net.Sockets;
 using System.Text;
 
 namespace FileSystem.Engine.FileSystemEngine
@@ -77,7 +78,7 @@ namespace FileSystem.Engine.FileSystemEngine
                 writer.Write(_nextAvailableBlockId);
             }
 
-            CalculateHeaderChecksum();
+            WriteHeaderChecksum();
 
             FillHeaderWithZeros();
         }
@@ -96,7 +97,82 @@ namespace FileSystem.Engine.FileSystemEngine
 
             _currentDir = _rootDirectory;
 
-            // TODO write root directory to container
+            long blockOffset = CalculateBlockOffset(_rootDirectory.FirstBlockId);
+            _containerStream.Seek(blockOffset, SeekOrigin.Begin);
+
+            Console.WriteLine("Root Block Header Information (Before CreateFolder):");
+            Console.WriteLine($"Block ID: {_rootDirectory.FirstBlockId}");
+            Console.WriteLine($"Block Offset: {blockOffset} bytes");
+
+            using (var reader = new BinaryReader(_containerStream, Encoding.UTF8, leaveOpen: true))
+            {
+                uint blockId = reader.ReadUInt32();
+                byte status = reader.ReadByte();
+                uint nextBlock = reader.ReadUInt32();
+                uint dataLength = reader.ReadUInt32();
+
+                Console.WriteLine($"Block ID from header: {blockId}");
+                Console.WriteLine($"Status: {status} ({(status == 1 ? "Used" : "Free")})");
+                Console.WriteLine($"Next Block: {nextBlock}");
+                Console.WriteLine($"Data Length: {dataLength} bytes");
+
+                // Read and display filler zeros (or whatever data is in the block)
+                uint fillerSize = FileSystemConstants.BlockSize - BlockInfo.GetSize();
+                byte[] fillerData = reader.ReadBytes((int)fillerSize);
+
+                Console.WriteLine("Filler Data (first 20 bytes):");
+                for (int i = 0; i < Math.Min(20, fillerData.Length); i++)
+                {
+                    Console.Write($"{fillerData[i]:X2} ");
+                }
+                Console.WriteLine();
+
+                // Count zeros in the filler data
+                int zeroCount = fillerData.Count(b => b == 0);
+                Console.WriteLine($"Zero bytes in filler: {zeroCount} of {fillerData.Length}");
+            }
+
+            Console.WriteLine();
+            Console.ReadLine();
+
+            CreateFolder(_rootDirectory);
+        }
+
+        private void CreateFolder(Element folder)
+        {
+            long blockOffset = CalculateBlockOffset(folder.FirstBlockId);
+            _containerStream.Seek(blockOffset + BlockInfo.GetSize(), SeekOrigin.Begin);
+
+            using (var writer = new BinaryWriter(_containerStream, Encoding.UTF8, leaveOpen: true))
+            {
+
+                writer.Write(folder.Name);
+                writer.Write(folder.CreationTime.ToBinary());
+                writer.Write(folder.FirstBlockId);
+                writer.Write(folder.ParentBlockId);
+                writer.Write(folder.Size);
+                writer.Write(folder.IsFolder);
+                writer.Write(folder.ChildrenCount);
+            }
+
+            uint bitesWritten = (uint)(_containerStream.Position - blockOffset);
+            UpdateBlockContentLenght(folder.FirstBlockId, bitesWritten);
+
+            WriteBlockChecksum(folder.FirstBlockId);
+        }
+
+        private void UpdateBlockContentLenght(uint firstBlockId, uint bitesWritten)
+        {
+            long blockOffset = CalculateBlockOffset(firstBlockId);
+
+            _containerStream.Seek(blockOffset + 8, SeekOrigin.Begin);
+
+            using (var writer = new BinaryWriter(_containerStream, Encoding.UTF8, leaveOpen: true))
+            {
+                writer.Write(bitesWritten);
+            }
+
+            // Not updating checksum because this will only be called in methods that already will update it
         }
 
         private uint AllocateBlock(uint count)
@@ -108,7 +184,7 @@ namespace FileSystem.Engine.FileSystemEngine
                 // Find the first free block
                 uint blockId = FindFreeBlock();
 
-                GetBlockInContainer(prevId, _nextAvailableBlockId);
+                GetBlockInContainer(prevId, blockId);
 
                 if (firstId == 0)
                     firstId = blockId;
@@ -147,6 +223,20 @@ namespace FileSystem.Engine.FileSystemEngine
                 UpdateNextBlockPointer(parentId, blockId);
 
             WriteBlockChecksum(blockId);
+
+            UpdateHeaderNextBlock();
+        }
+
+        private void UpdateHeaderNextBlock()
+        {
+            _containerStream.Seek(14, SeekOrigin.Begin);
+
+            using (var writer = new BinaryWriter(_containerStream, Encoding.UTF8, leaveOpen: true))
+            {
+                writer.Write(_nextAvailableBlockId);
+            }
+
+            WriteHeaderChecksum();
         }
 
         private void WriteBlockChecksum(uint blockId)
@@ -230,7 +320,7 @@ namespace FileSystem.Engine.FileSystemEngine
         /// <summary>
         /// Calculates the checksum of the header and writes it to the file.
         /// </summary>
-        private void CalculateHeaderChecksum()
+        private void WriteHeaderChecksum()
         {
             byte[] headerData = new byte[FileSystemConstants.HeaderSize - 16];
             _containerStream.Seek(0, SeekOrigin.Begin);

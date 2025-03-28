@@ -1,0 +1,37 @@
+﻿long blockOffset = CalculateBlockOffset(_rootDirectory.FirstBlockId);
+            _containerStream.Seek(blockOffset, SeekOrigin.Begin);
+
+            Console.WriteLine("Root Block Header Information (Before CreateFolder):");
+            Console.WriteLine($"Block ID: {_rootDirectory.FirstBlockId}");
+            Console.WriteLine($"Block Offset: {blockOffset} bytes");
+
+            using (var reader = new BinaryReader(_containerStream, Encoding.UTF8, leaveOpen: true))
+            {
+                uint blockId = reader.ReadUInt32();
+                byte status = reader.ReadByte();
+                uint nextBlock = reader.ReadUInt32();
+                uint dataLength = reader.ReadUInt32();
+
+                Console.WriteLine($"Block ID from header: {blockId}");
+                Console.WriteLine($"Status: {status} ({(status == 1 ? "Used" : "Free")})");
+                Console.WriteLine($"Next Block: {nextBlock}");
+                Console.WriteLine($"Data Length: {dataLength} bytes");
+
+                // Read and display filler zeros (or whatever data is in the block)
+                uint fillerSize = FileSystemConstants.BlockSize - BlockInfo.GetSize();
+                byte[] fillerData = reader.ReadBytes((int)fillerSize);
+
+                Console.WriteLine("Filler Data (first 20 bytes):");
+                for (int i = 0; i < Math.Min(20, fillerData.Length); i++)
+                {
+                    Console.Write($"{fillerData[i]:X2} ");
+                }
+                Console.WriteLine();
+
+                // Count zeros in the filler data
+                int zeroCount = fillerData.Count(b => b == 0);
+                Console.WriteLine($"Zero bytes in filler: {zeroCount} of {fillerData.Length}");
+            }
+
+            Console.WriteLine();
+            Console.ReadLine();
