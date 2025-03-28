@@ -1,6 +1,7 @@
 ﻿using FileSystem.Constants;
 using FileSystem.Engine.FileSystemEngine.ContainerElements;
 using System.Net.Sockets;
+using System.Reflection.PortableExecutable;
 using System.Text;
 
 namespace FileSystem.Engine.FileSystemEngine
@@ -49,7 +50,143 @@ namespace FileSystem.Engine.FileSystemEngine
         /// </summary>
         private void OpenContainer()
         {
-            throw new NotImplementedException();
+            _containerStream = new FileStream(FileSystemConstants.ContainerPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+            if (!ValidateHeader())
+                throw new InvalidDataException("Invalid container file format");
+
+            LoadHeaderInfo();
+
+            _rootDirectory = ReadDirectoryEntry(1);
+            _currentDir = _rootDirectory;
+        }
+
+        private Element ReadDirectoryEntry(uint blockId)
+        {
+            byte[] data = ReadBlockData(blockId);
+
+            Element element = new Element();
+
+            using (MemoryStream ms = new MemoryStream(data))
+            using (BinaryReader reader = new BinaryReader(ms))
+            {
+                // Read entry name
+                int nameLength = reader.ReadInt32();
+                byte[] nameBytes = reader.ReadBytes(nameLength);
+                element.Name = Encoding.UTF8.GetString(nameBytes);
+
+                // Read entry metadata
+                element.CreationTime = DateTime.FromBinary(reader.ReadInt64());
+                element.FirstBlockId = reader.ReadUInt32();
+                element.ParentBlockId = reader.ReadUInt32();
+                element.Size = reader.ReadUInt32();
+                element.IsFolder = reader.ReadBoolean();
+                element.ChildrenCount = reader.ReadUInt32();
+            }
+
+            return element;
+        }
+
+        private byte[] ReadBlockData(uint blockId)
+        {
+            // Verify block checksum
+            if (!VerifyBlockChecksum(blockId))
+                throw new InvalidDataException($"Block {blockId} failed checksum verification");
+
+            long offset = CalculateBlockOffset(blockId);
+
+            // Seek past the header
+            _containerStream.Seek(offset + BlockInfo.GetSize(), SeekOrigin.Begin);
+
+            byte[] data = new byte[FileSystemConstants.BlockSize - BlockInfo.GetSize()];
+            _containerStream.Read(data, 0, data.Length);
+
+            return data;
+        }
+
+        private bool VerifyBlockChecksum(uint blockId)
+        {
+            long offset = CalculateBlockOffset(blockId);
+
+            // Read block data (header + data)
+            _containerStream.Seek(offset, SeekOrigin.Begin);
+            byte[] blockData = new byte[FileSystemConstants.BlockSize - BlockInfo.ChecksumLength];
+            _containerStream.Read(blockData, 0, blockData.Length);
+
+            // Read stored checksum
+            byte[] storedChecksum = new byte[BlockInfo.ChecksumLength];
+            _containerStream.Read(storedChecksum, 0, BlockInfo.ChecksumLength);
+
+            // Calculate checksum
+            byte[] calculatedChecksum = CalculateChecksum(blockData);
+
+            // Compare checksums
+            for (int i = 0; i < BlockInfo.ChecksumLength; i++)
+                if (storedChecksum[i] != calculatedChecksum[i])
+                    return false;
+
+            return true;
+        }
+
+        private void LoadHeaderInfo()
+        {
+            // Reset the stream position to the beginning
+            _containerStream.Seek(0, SeekOrigin.Begin);
+
+            using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
+            {
+                // Skip magic number and version which were already validated in ValidateHeader
+                reader.ReadUInt32(); // Magic number
+                reader.ReadUInt16(); // Version
+
+                // Read block size and header size (we already know these constants, but read them to advance the stream position)
+                uint blockSize = reader.ReadUInt32();
+                uint headerSize = reader.ReadUInt32();
+
+                // Read the next available block ID
+                _nextAvailableBlockId = reader.ReadUInt32();
+            }
+
+            // Verify that all the read information is valid
+            if (_nextAvailableBlockId < 1)
+                throw new InvalidDataException("Invalid next available block ID in header");
+            
+        }
+
+        private bool ValidateHeader()
+        {
+            _containerStream.Seek(0, SeekOrigin.Begin);
+
+            if (_containerStream.Length < FileSystemConstants.HeaderSize)
+                return false;
+
+            using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
+            {
+                uint magicNumber = reader.ReadUInt32();
+                if(magicNumber != FileSystemConstants.MagicNumber)
+                    return false;
+
+                ushort version = reader.ReadUInt16();
+                if (version != FileSystemConstants.Version)
+                    return false;
+
+                // Read header data for checksum verification
+                _containerStream.Seek(0, SeekOrigin.Begin);
+                byte[] headerData = new byte[FileSystemConstants.HeaderSize - 16];
+                _containerStream.Read(headerData, 0, headerData.Length);
+
+                // Read stored checksum
+                byte[] storedChecksum = new byte[16];
+                _containerStream.Read(storedChecksum, 0, 16);
+
+                byte[] calculatedChecksum = CalculateChecksum(headerData);
+
+                for (int i = 0; i < 16; i++)
+                    if (storedChecksum[i] != calculatedChecksum[i])
+                        return false;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -100,41 +237,6 @@ namespace FileSystem.Engine.FileSystemEngine
             long blockOffset = CalculateBlockOffset(_rootDirectory.FirstBlockId);
             _containerStream.Seek(blockOffset, SeekOrigin.Begin);
 
-            Console.WriteLine("Root Block Header Information (Before CreateFolder):");
-            Console.WriteLine($"Block ID: {_rootDirectory.FirstBlockId}");
-            Console.WriteLine($"Block Offset: {blockOffset} bytes");
-
-            using (var reader = new BinaryReader(_containerStream, Encoding.UTF8, leaveOpen: true))
-            {
-                uint blockId = reader.ReadUInt32();
-                byte status = reader.ReadByte();
-                uint nextBlock = reader.ReadUInt32();
-                uint dataLength = reader.ReadUInt32();
-
-                Console.WriteLine($"Block ID from header: {blockId}");
-                Console.WriteLine($"Status: {status} ({(status == 1 ? "Used" : "Free")})");
-                Console.WriteLine($"Next Block: {nextBlock}");
-                Console.WriteLine($"Data Length: {dataLength} bytes");
-
-                // Read and display filler zeros (or whatever data is in the block)
-                uint fillerSize = FileSystemConstants.BlockSize - BlockInfo.GetSize();
-                byte[] fillerData = reader.ReadBytes((int)fillerSize);
-
-                Console.WriteLine("Filler Data (first 20 bytes):");
-                for (int i = 0; i < Math.Min(20, fillerData.Length); i++)
-                {
-                    Console.Write($"{fillerData[i]:X2} ");
-                }
-                Console.WriteLine();
-
-                // Count zeros in the filler data
-                int zeroCount = fillerData.Count(b => b == 0);
-                Console.WriteLine($"Zero bytes in filler: {zeroCount} of {fillerData.Length}");
-            }
-
-            Console.WriteLine();
-            Console.ReadLine();
-
             CreateFolder(_rootDirectory);
         }
 
@@ -142,11 +244,15 @@ namespace FileSystem.Engine.FileSystemEngine
         {
             long blockOffset = CalculateBlockOffset(folder.FirstBlockId);
             _containerStream.Seek(blockOffset + BlockInfo.GetSize(), SeekOrigin.Begin);
+            long dataStartPosition = _containerStream.Position;
+
+            byte[] nameBytes = Encoding.UTF8.GetBytes(folder.Name);
 
             using (var writer = new BinaryWriter(_containerStream, Encoding.UTF8, leaveOpen: true))
             {
-
-                writer.Write(folder.Name);
+                writer.Write(nameBytes.Length);
+                if (nameBytes.Length > 0)
+                    writer.Write(nameBytes);
                 writer.Write(folder.CreationTime.ToBinary());
                 writer.Write(folder.FirstBlockId);
                 writer.Write(folder.ParentBlockId);
@@ -155,7 +261,7 @@ namespace FileSystem.Engine.FileSystemEngine
                 writer.Write(folder.ChildrenCount);
             }
 
-            uint bitesWritten = (uint)(_containerStream.Position - blockOffset);
+            uint bitesWritten = (uint)(_containerStream.Position - dataStartPosition);
             UpdateBlockContentLenght(folder.FirstBlockId, bitesWritten);
 
             WriteBlockChecksum(folder.FirstBlockId);
