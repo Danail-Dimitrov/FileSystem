@@ -1,4 +1,5 @@
 ﻿using FileSystem.Engine.ApplicationEngine;
+using FileSystem.Engine.FileSystemEngine;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -15,6 +16,7 @@ namespace FileSystem.DependancyInjection
                 .ConfigureServices((hostContext, services) =>
                 {
                     services.AddSingleton<IApplicationEngine, ApplicationEngine>();
+                    services.AddSingleton<IFileSystemEngine, FileSystemEngine>();
                 });
     }
 }

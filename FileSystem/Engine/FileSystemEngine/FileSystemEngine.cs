@@ -14,8 +14,8 @@ namespace FileSystem.Engine.FileSystemEngine
         /// The stream of the container file.
         /// </summary>
         private FileStream _containerStream;
-        private Folder _root;
-        private Folder _currentDir;
+        private Element _rootDirectory;
+        private Element _currentDir;
         private uint _nextAvailableBlockId;
 
         public FileSystemEngine()
@@ -34,8 +34,13 @@ namespace FileSystem.Engine.FileSystemEngine
         private void CreateContainer()
         {
             _containerStream = new FileStream(FileSystemConstants.ContainerPath, FileMode.Create, FileAccess.ReadWrite);
+            _nextAvailableBlockId = 1;
 
             WriteHeader();
+
+            InitRoot();
+
+            _containerStream.Flush();
         }
 
         /// <summary>
@@ -63,7 +68,7 @@ namespace FileSystem.Engine.FileSystemEngine
         {
             _containerStream.Seek(0, SeekOrigin.Begin);
 
-            using (var writer = new BinaryWriter(_containerStream))
+            using (var writer = new BinaryWriter(_containerStream, Encoding.UTF8, leaveOpen: true))
             {
                 writer.Write(FileSystemConstants.MagicNumber);
                 writer.Write(FileSystemConstants.Version);
@@ -75,6 +80,139 @@ namespace FileSystem.Engine.FileSystemEngine
             CalculateHeaderChecksum();
 
             FillHeaderWithZeros();
+        }
+
+        private void InitRoot()
+        {
+            _rootDirectory = new Element
+            {
+                Name = "",
+                CreationTime = DateTime.Now,
+                FirstBlockId = AllocateBlock(1),
+                ParentBlockId = 0,
+                Size = 0,
+                IsFolder = true
+            };
+
+            _currentDir = _rootDirectory;
+
+            // TODO write root directory to container
+        }
+
+        private uint AllocateBlock(uint count)
+        {
+            uint firstId = 0;
+            uint prevId = 0;
+            for (uint i = 0; i < count; i++)
+            {
+                // Find the first free block
+                uint blockId = FindFreeBlock();
+
+                GetBlockInContainer(prevId, _nextAvailableBlockId);
+
+                if (firstId == 0)
+                    firstId = blockId;
+
+                prevId = blockId;
+            }
+
+            return firstId;
+        }
+
+        private void GetBlockInContainer(uint parentId, uint blockId)
+        {
+            long blockOffset = CalculateBlockOffset(blockId);
+            _containerStream.Seek(blockOffset, SeekOrigin.Begin);
+
+            using (var writer = new BinaryWriter(_containerStream, Encoding.UTF8, leaveOpen: true))
+            {
+                // Write block ID
+                writer.Write(blockId);
+
+                // Write block status (1 = used)
+                writer.Write((byte)1);
+
+                // Write next block ID (0 for now - will be updated if this block gets a child)
+                writer.Write((uint)0);
+
+                // Write data length (0 for now - will be updated when content is added)
+                writer.Write((uint)0);
+            }
+
+            int remainingSize = FileSystemConstants.BlockSize - (int)BlockInfo.GetSize();
+            byte[] padding = new byte[remainingSize];
+            _containerStream.Write(padding, 0, padding.Length);
+
+            if (parentId != 0)
+                UpdateNextBlockPointer(parentId, blockId);
+
+            WriteBlockChecksum(blockId);
+        }
+
+        private void WriteBlockChecksum(uint blockId)
+        {
+            long blockOffset = CalculateBlockOffset(blockId);
+
+            // Read block data (excluding checksum)
+            _containerStream.Seek(blockOffset, SeekOrigin.Begin);
+
+            // Use BinaryReader to read the block data
+            byte[] blockData = new byte[FileSystemConstants.BlockSize - 16]; // 16 bytes for checksum
+            using (var reader = new BinaryReader(_containerStream, Encoding.UTF8, leaveOpen: true))
+            {
+                blockData = reader.ReadBytes(FileSystemConstants.BlockSize - 16);
+            }
+
+            // Calculate checksum
+            byte[] checksum = CalculateChecksum(blockData);
+
+            // Write checksum at the end of the block
+            _containerStream.Seek(blockOffset + FileSystemConstants.BlockSize - 16, SeekOrigin.Begin);
+
+            // Use BinaryWriter to write the checksum
+            using (var writer = new BinaryWriter(_containerStream, Encoding.UTF8, leaveOpen: true))
+            {
+                writer.Write(checksum);
+            }
+        }
+
+        private void UpdateNextBlockPointer(uint blockId, uint nextBlockId)
+        {
+            long blockOffset = CalculateBlockOffset(blockId);
+
+            // Next block ID is stored after block ID (4 bytes) and status (1 byte)
+            long nextBlockOffset = blockOffset + 4 + 1;
+
+            _containerStream.Seek(nextBlockOffset, SeekOrigin.Begin);
+
+            // Write the next block ID
+            using (var writer = new BinaryWriter(_containerStream, Encoding.UTF8, leaveOpen: true))
+            {
+                writer.Write(nextBlockId);
+            }
+
+            WriteBlockChecksum(blockId);
+        }
+
+        private uint FindFreeBlock()
+        {
+            for (uint blockId = 1; blockId < _nextAvailableBlockId; blockId++)
+            {
+                if (IsBlockFree(blockId))
+                    return blockId;
+            }
+
+            return _nextAvailableBlockId++;
+        }
+
+        private bool IsBlockFree(uint blockId)
+        {
+            long batOffset = FileSystemConstants.HeaderSize + (blockId - 1);
+
+            _containerStream.Seek(batOffset, SeekOrigin.Begin);
+            int status = _containerStream.ReadByte();
+
+            return status == 0;
         }
 
         /// <summary>
@@ -94,7 +232,7 @@ namespace FileSystem.Engine.FileSystemEngine
         /// </summary>
         private void CalculateHeaderChecksum()
         {
-            byte[] headerData = new byte[FileSystemConstants.HeaderSize - 16]; 
+            byte[] headerData = new byte[FileSystemConstants.HeaderSize - 16];
             _containerStream.Seek(0, SeekOrigin.Begin);
             _containerStream.Read(headerData, 0, headerData.Length);
 

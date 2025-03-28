@@ -10,7 +10,8 @@
 
         public uint BlockId;
         public bool IsUsed;
-        public uint NextBlock; 
+        public uint NextBlock;
+        public uint ContentLenght;
 
         public byte[] Checksum 
         {
@@ -27,7 +28,7 @@
 
         public static uint GetSize()
         {
-            return (uint)(sizeof(uint) + sizeof(bool) + sizeof(uint) + ChecksumLength);
+            return (uint)(sizeof(uint) + sizeof(uint) + sizeof(bool) + sizeof(uint) + ChecksumLength);
         }
     }
 }

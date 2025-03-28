@@ -1,4 +1,5 @@
-﻿using FileSystem.IO;
+﻿using FileSystem.Engine.FileSystemEngine;
+using FileSystem.IO;
 
 namespace FileSystem.Engine.ApplicationEngine
 {
@@ -8,9 +9,18 @@ namespace FileSystem.Engine.ApplicationEngine
     /// </summary>
     public class ApplicationEngine : IApplicationEngine
     {
-        public ApplicationEngine()
+        private IFileSystemEngine _fsEngine;
+
+        public ApplicationEngine(IFileSystemEngine engine)
         {
             IsRunning = false;
+            _fsEngine = engine;
+            InitComands();
+        }
+
+        private void InitComands()
+        {
+            throw new NotImplementedException();
         }
 
         /// <summary>
