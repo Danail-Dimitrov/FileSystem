@@ -1,7 +1,5 @@
 ﻿using FileSystem.Constants;
 using FileSystem.Engine.FileSystemEngine.ContainerElements;
-using System.Net.Sockets;
-using System.Reflection.PortableExecutable;
 using System.Text;
 
 namespace FileSystem.Engine.FileSystemEngine
@@ -20,7 +18,9 @@ namespace FileSystem.Engine.FileSystemEngine
         private Element _currentDir;
         private uint _nextAvailableBlockId;
 
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
         public FileSystemEngine()
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
         {
             if (File.Exists(FileSystemConstants.ContainerPath))
                 // Open the file system.
@@ -474,15 +474,145 @@ namespace FileSystem.Engine.FileSystemEngine
             return checksum;
         }
 
+        private bool FileExistsInCurrentDirectory(string fileName)
+        {
+            List<Element> entries = GetDirectoryEntries(_currentDir);
+
+            foreach (var entry in entries)
+            {
+                if (entry.Name.Equals(fileName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private List<Element> GetDirectoryEntries(Element directory)
+        {
+            if (!directory.IsFolder)
+                throw new ArgumentException("Not a directory", nameof(directory));
+
+            List<Element> entries = new List<Element>();
+
+            uint childCount = directory.ChildrenCount;
+
+            if (childCount == 0)
+                return entries;
+
+            long directoryOffset = CalculateBlockOffset(directory.FirstBlockId);
+
+            _containerStream.Seek(directoryOffset + BlockInfo.GetSize(), SeekOrigin.Begin);
+
+            using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
+            {
+                // Skip the name length and name
+                int nameLength = reader.ReadInt32();
+                reader.ReadBytes(nameLength); // Skip name
+
+                // Skip other directory metadata
+                reader.ReadInt64(); // Creation time
+                reader.ReadUInt32(); // First block ID
+                reader.ReadUInt32(); // Parent block ID
+                reader.ReadUInt32(); // Size
+                reader.ReadBoolean(); // Is folder
+                reader.ReadUInt32();
+
+                // Now read children block IDs
+                for (int i = 0; i < childCount; i++)
+                {
+                    uint childBlockId = reader.ReadUInt32();
+                    entries.Add(ReadDirectoryEntry(childBlockId));
+                }
+            }
+
+            return entries;
+        }
+
+        private uint GetNextBlockId(uint currentBlockId)
+        {
+            long blockOffset = CalculateBlockOffset(currentBlockId);
+
+            _containerStream.Seek(blockOffset + 5, SeekOrigin.Begin);
+
+            using (var reader = new BinaryReader(_containerStream, Encoding.UTF8, leaveOpen: true))
+            {
+                return reader.ReadUInt32();
+            }
+        }
+
+        private void WriteFileDataToBlock(uint blockId, byte[] data, int length)
+        {
+            long blockOffset = CalculateBlockOffset(blockId);
+
+            _containerStream.Seek(blockOffset + BlockInfo.GetSize(), SeekOrigin.Begin);
+
+            // Write the data
+            _containerStream.Write(data, 0, length);
+
+            // Update the block's content length in the header
+            UpdateBlockContentLenght(blockId, (uint)length);
+
+            // Update the block's checksum
+            WriteBlockChecksum(blockId);
+        }
+
         /// <summary>
         /// This is the implementation of the cpin command.
         /// It takes a file from the real file system and copies it into the container.
         /// </summary>
         /// <param name="source">The real file on the pc.</param>
         /// <param name="destination">The destination in the container</param>
-        public void CopyIn(string source, string destination)
+        public void CopyIn(string source, string fileName)
         {
-            throw new System.NotImplementedException();
+            if (!File.Exists(source))
+                throw new FileNotFoundException("Source file not found", source);
+
+            FileInfo fileInfo = new FileInfo(source);
+            long fileSize = fileInfo.Length;
+
+            if (FileExistsInCurrentDirectory(fileName))
+                throw new IOException($"A file with name '{fileName}' already exists in the current directory");
+
+            uint usableBlockSize = FileSystemConstants.BlockSize - BlockInfo.GetSize() - BlockInfo.ChecksumLength;
+            uint blocksNeeded = (uint)Math.Ceiling((double)fileSize / usableBlockSize);
+
+            uint firstBlockId = AllocateBlock(blocksNeeded);
+            if (firstBlockId == 0)
+                throw new IOException("Failed to allocate blocks for the file");
+
+            Element fileEntry = new Element
+            {
+                Name = fileName,
+                CreationTime = DateTime.Now,
+                FirstBlockId = firstBlockId,
+                ParentBlockId = _currentDir.FirstBlockId,
+                Size = (uint)fileSize,
+                IsFolder = false
+            };
+
+            using (FileStream sourceStream = new FileStream(source, FileMode.Open, FileAccess.Read))
+            {
+                uint currentBlockId = firstBlockId;
+                byte[] buffer = new byte[usableBlockSize];
+                int bytesRead;
+                long totalBytesWritten = 0;
+
+                while ((bytesRead = sourceStream.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    // Write data to the current block
+                    WriteFileDataToBlock(currentBlockId, buffer, bytesRead);
+                    totalBytesWritten += bytesRead;
+
+                    // Move to the next block if necessary
+                    if (totalBytesWritten < fileSize)
+                    {
+                        // Get the next block ID in the chain
+                        currentBlockId = GetNextBlockId(currentBlockId);
+                        if (currentBlockId == 0)
+                            throw new IOException("Unexpected end of block chain");
+                    }
+                }
+            }
         }
     }
 }
