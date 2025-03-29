@@ -1,4 +1,4 @@
-﻿namespace FileSystem.DataStructures.MyList
+﻿namespace FileSystem.DataStructures.List
 {
     public interface IMyList<T> : IList<T>
     {

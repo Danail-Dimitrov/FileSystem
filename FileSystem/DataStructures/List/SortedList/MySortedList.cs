@@ -1,7 +1,14 @@
-﻿namespace FileSystem.DataStructures.MyList.MySortedList
+﻿namespace FileSystem.DataStructures.List.SortedList
 {
-    public class MySortetList<T> : MyList<T>, IMySortedList<T> where T : IComparable
+    public class MySortedList<T> : MyList<T>, IMySortedList<T> where T : IComparable<T>
     {
+        public MySortedList() : base()
+        { }
+
+        public MySortedList(uint capacity) : base(capacity)
+        {
+        }
+
         public void Sort()
         {
             MergeSort(0, _count - 1);
@@ -10,7 +17,7 @@
         // Implementation from lectures
         private void MergeSort(int l, int r)
         {
-            if(l < r)
+            if (l < r)
             {
                 int m = (l + r) / 2;
 
@@ -37,7 +44,7 @@
             int t = 0;
             int j = 0;
             int k = l;
-            while(t < n1 && j < n2)
+            while (t < n1 && j < n2)
             {
                 if (L[t].CompareTo(R[j]) <= 0)
                     _items[k++] = L[t++];

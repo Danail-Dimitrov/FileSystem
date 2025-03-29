@@ -1,14 +1,12 @@
 ﻿#pragma warning disable CS8600 
 #pragma warning disable CS8625 
 
-using FileSystem.Engine.FileSystemEngine.ContainerElements;
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 
-namespace FileSystem.DataStructures.MyDictionary
+namespace FileSystem.DataStructures.Dictionary
 {
     public class MyDictionary<TKey, TValue> : IMyDictionary<TKey, TValue> where TKey : IComparable
-                                                                          where TValue : IComparable
     {
         private class Node
         {
@@ -36,7 +34,7 @@ namespace FileSystem.DataStructures.MyDictionary
             _count = 0;
         }
 
-        public TValue this[TKey key] 
+        public TValue this[TKey key]
         {
             get => TryGetValue(key, out TValue value) ? value : throw new KeyNotFoundException();
             set
@@ -51,7 +49,7 @@ namespace FileSystem.DataStructures.MyDictionary
                     }
                     current = current.Next;
                 }
-                
+
                 Add(key, value);
             }
         }
@@ -92,10 +90,10 @@ namespace FileSystem.DataStructures.MyDictionary
 
         public void Add(TKey key, TValue value)
         {
-            if(key == null)
+            if (key == null)
                 throw new ArgumentNullException(nameof(key));
 
-            if(ContainsKey(key))
+            if (ContainsKey(key))
                 throw new ArgumentException("An element with the same key already exists in the dictionary.");
 
             Node node = new Node(key, value);
@@ -154,7 +152,7 @@ namespace FileSystem.DataStructures.MyDictionary
             if (arrayIndex < 0 || arrayIndex > array.Length)
                 throw new ArgumentOutOfRangeException(nameof(arrayIndex));
 
-            for(int i = arrayIndex; i < array.Length; i++)
+            for (int i = arrayIndex; i < array.Length; i++)
                 Add(array[i]);
         }
 

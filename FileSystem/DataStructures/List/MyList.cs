@@ -2,13 +2,12 @@
 
 using System.Collections;
 
-namespace FileSystem.DataStructures.MyList
+namespace FileSystem.DataStructures.List
 {
     public class MyList<T> : IMyList<T>
     {
         protected T[] _items;
         protected int _count;
-
         private const uint DefaultCapacity = 4;
         private const short IncreaseStep = 2;
 
@@ -22,6 +21,14 @@ namespace FileSystem.DataStructures.MyList
         {
             _items = new T[capacity];
             _count = 0;
+        }
+
+        public MyList(MyList<T> list)
+        {
+            _items = new T[list.Capacity];
+            _count = 0;
+            for (int i = 0; i < list.Count; i++)
+                Add(list[i]);
         }
 
         public int Count => _count;
@@ -79,13 +86,13 @@ namespace FileSystem.DataStructures.MyList
 
         public void CopyTo(T[] array, int arrayIndex)
         {
-            if(array == null)
+            if (array == null)
                 throw new System.ArgumentNullException();
 
             if (arrayIndex < 0 || arrayIndex >= array.Length)
                 throw new System.ArgumentOutOfRangeException();
 
-            for(int i = arrayIndex; i < array.Length; i++)
+            for (int i = arrayIndex; i < array.Length; i++)
                 Add(array[i]);
         }
 
@@ -115,7 +122,7 @@ namespace FileSystem.DataStructures.MyList
                 Resize();
 
             // Shift elements one position further right
-            for(int i = index; i < _count; i++)
+            for (int i = index; i < _count; i++)
                 _items[i + 1] = _items[i];
 
             _items[index] = item;
