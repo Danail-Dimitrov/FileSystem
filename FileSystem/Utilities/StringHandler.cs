@@ -39,5 +39,31 @@
             }
             return new string(chars);
         }
+
+        public static short Compare(string str1, string str2)
+        {
+            if (str1 == null && str2 == null)
+                return 0;
+            if (str1 == null)
+                return -1;
+            if (str2 == null)
+                return 1;
+
+            int minLength = str1.Length < str2.Length ? str1.Length : str2.Length;
+            for (int i = 0; i < minLength; i++)
+            {
+                if (str1[i] < str2[i])
+                    return -1;
+                if (str1[i] > str2[i])
+                    return 1;
+            }
+
+            if (str1.Length < str2.Length)
+                return -1;
+            if (str1.Length > str2.Length)
+                return 1;
+
+            return 0;
+        }
     }
 }

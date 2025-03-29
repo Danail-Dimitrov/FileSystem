@@ -1,5 +1,7 @@
 ﻿using FileSystem.Constants;
+using FileSystem.DataStructures.MyList;
 using FileSystem.Engine.FileSystemEngine.ContainerElements;
+using FileSystem.Utilities;
 using System.Text;
 
 namespace FileSystem.Engine.FileSystemEngine
@@ -476,23 +478,23 @@ namespace FileSystem.Engine.FileSystemEngine
 
         private bool FileExistsInCurrentDirectory(string fileName)
         {
-            List<Element> entries = GetDirectoryEntries(_currentDir);
+            MyList<Element> entries = GetDirectoryEntries(_currentDir);
 
             foreach (var entry in entries)
             {
-                if (entry.Name.Equals(fileName, StringComparison.OrdinalIgnoreCase))
+                if (StringHandler.Compare(entry.Name, fileName) == 0)
                     return true;
             }
 
             return false;
         }
 
-        private List<Element> GetDirectoryEntries(Element directory)
+        private MyList<Element> GetDirectoryEntries(Element directory)
         {
             if (!directory.IsFolder)
                 throw new ArgumentException("Not a directory", nameof(directory));
 
-            List<Element> entries = new List<Element>();
+            MyList<Element> entries = new MyList<Element>();
 
             uint childCount = directory.ChildrenCount;
 
