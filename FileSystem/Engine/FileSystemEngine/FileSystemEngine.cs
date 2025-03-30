@@ -1,4 +1,5 @@
-﻿using FileSystem.Constants;
+﻿using FileSystem.Compression;
+using FileSystem.Constants;
 using FileSystem.DataStructures.List;
 using FileSystem.DataStructures.List.SortedList;
 using FileSystem.Engine.FileSystemEngine.ContainerElements;
@@ -602,9 +603,18 @@ namespace FileSystem.Engine.FileSystemEngine
 
                 while ((bytesRead = sourceStream.Read(buffer, 0, buffer.Length)) > 0)
                 {
+
+                    totalBytesWritten += bytesRead;
+                    byte[] compressed = HuffmanCompression.Compress(buffer);
+
+                    if(compressed.Length < buffer.Length)
+                    {
+                        buffer = compressed;
+                        bytesRead = compressed.Length;
+                    }
+
                     // Write data to the current block
                     WriteFileDataToBlock(currentBlockId, buffer, bytesRead);
-                    totalBytesWritten += bytesRead;
 
                     // Move to the next block if necessary
                     if (totalBytesWritten < fileSize)

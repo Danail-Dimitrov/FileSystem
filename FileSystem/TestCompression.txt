@@ -1,0 +1,143 @@
+﻿using FileSystem.Compression;
+using FileSystem.DataStructures.List.SortedList;
+using FileSystem.DependancyInjection;
+using FileSystem.Engine.ApplicationEngine;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System.Text;
+
+namespace FileSystem
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            Console.WriteLine("Huffman Compression Test Program");
+            Console.WriteLine("================================");
+
+            // Test with a simple string
+            TestCompression("This is a test string. It should be compressible because it has repeating characters.");
+
+            // Test with a highly compressible string (lots of repetition)
+            TestCompression(new string('A', 1000) + new string('B', 500) + new string('C', 250));
+
+            // Test with a random data (less compressible)
+            TestCompression(GenerateRandomString(500));
+
+            // Test with a file if one is specified
+            if (args.Length > 0 && File.Exists(args[0]))
+            {
+                Console.WriteLine($"\nCompressing file: {args[0]}");
+                byte[] fileData = File.ReadAllBytes(args[0]);
+                TestCompressionRaw(fileData);
+            }
+
+            Console.WriteLine("\nPress any key to exit...");
+            Console.ReadKey();
+        }
+
+        /// <summary>
+        /// Tests compression and decompression with the given string
+        /// </summary>
+        static void TestCompression(string input)
+        {
+            Console.WriteLine($"\nOriginal text ({input.Length} bytes):");
+            Console.WriteLine(input.Length > 100 ? input.Substring(0, 100) + "..." : input);
+
+            // Convert to bytes
+            byte[] originalData = Encoding.UTF8.GetBytes(input);
+            TestCompressionRaw(originalData);
+        }
+
+        /// <summary>
+        /// Tests compression and decompression with raw binary data
+        /// </summary>
+        static void TestCompressionRaw(byte[] originalData)
+        {
+            // Compress
+            byte[] compressedData = HuffmanCompression.Compress(originalData);
+
+            // Show compression ratio
+            double ratio = (double)compressedData.Length / originalData.Length * 100;
+            Console.WriteLine($"Compressed size: {compressedData.Length} bytes");
+
+            // Decompress
+            byte[] decompressedData = HuffmanCompression.Decompress(compressedData);
+
+            // Verify
+            bool identical = CompareByteArrays(originalData, decompressedData);
+            Console.WriteLine($"Decompression successful: {identical}");
+
+            // If the data is text, show a sample of the decompressed result
+            if (IsTextData(originalData))
+            {
+                string decompressedText = Encoding.UTF8.GetString(decompressedData);
+                Console.WriteLine("Decompressed text sample:");
+                Console.WriteLine(decompressedText.Length > 100 ? decompressedText.Substring(0, 100) + "..." : decompressedText);
+            }
+        }
+
+        /// <summary>
+        /// Compares two byte arrays for equality
+        /// </summary>
+        static bool CompareByteArrays(byte[] array1, byte[] array2)
+        {
+            if (array1.Length != array2.Length)
+                return false;
+
+            for (int i = 0; i < array1.Length; i++)
+            {
+                if (array1[i] != array2[i])
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Generates a random string of specified length
+        /// </summary>
+        static string GenerateRandomString(int length)
+        {
+            Random random = new Random();
+            char[] chars = new char[length];
+
+            for (int i = 0; i < length; i++)
+            {
+                chars[i] = (char)random.Next(32, 127); // Printable ASCII
+            }
+
+            return new string(chars);
+        }
+
+        /// <summary>
+        /// Tries to determine if the data is text
+        /// </summary>
+        static bool IsTextData(byte[] data)
+        {
+            // Heuristic: if most bytes are in the printable ASCII range, it's probably text
+            int printableCount = 0;
+
+            for (int i = 0; i < Math.Min(1000, data.Length); i++) // Check at most 1000 bytes
+            {
+                if (data[i] >= 32 && data[i] <= 126 || data[i] == 9 || data[i] == 10 || data[i] == 13)
+                {
+                    printableCount++;
+                }
+            }
+
+            return (double)printableCount / Math.Min(1000, data.Length) > 0.8;
+        }
+    }
+}
+    /*internal class Program
+    {
+        static void Main(string[] args)
+        {
+            var host = DependancyInjectionSetUp.CreateHostBuilder().Build();
+
+            var appEngine = host.Services.GetRequiredService<IApplicationEngine>();
+            appEngine.Run();
+        }
+    }
+}*/

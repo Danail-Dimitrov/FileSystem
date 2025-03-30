@@ -35,6 +35,8 @@ namespace FileSystem.Compression
 
             SerializeTree(root, bitWriter);
 
+            int treeSize = bitWriter.BitsWritten;
+
             EncodeData(data, codeTable, bitWriter);
 
             byte[] compressedBody = bitWriter.ToArray();
@@ -46,6 +48,9 @@ namespace FileSystem.Compression
                     writer.Write(data.Length);
 
                     writer.Write(compressedBody.Length);
+
+                    writer.Write(treeSize);
+
                     writer.Write(compressedBody);
                 }
 
@@ -65,6 +70,12 @@ namespace FileSystem.Compression
                         return [];
 
                     int compressedBodyLength = reader.ReadInt32();
+
+                    // Skip tree size.
+                    // We don't need it for decompression
+                    // Only for calculating how many blocks to read from in the engine
+                    reader.ReadInt32(); 
+
                     byte[] compressedBody = reader.ReadBytes(compressedBodyLength);
 
                     // Create a bit reader for the compressed body

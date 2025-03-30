@@ -10,13 +10,17 @@ namespace FileSystem.Compression.BitUtils
         private byte _currentByte;
         private int _bitPosition;
         private readonly MemoryStream _stream;
+        private int _bitsWritten;
 
         public BitWriter()
         {
             _stream = new MemoryStream();
             _currentByte = 0;
             _bitPosition = 0;
+            _bitsWritten = 0;
         }
+
+        public int BitsWritten => _bitsWritten;
 
         public void WriteBit(bool bit)
         {
@@ -33,6 +37,8 @@ namespace FileSystem.Compression.BitUtils
                 _currentByte = 0;
                 _bitPosition = 0;
             }
+
+            _bitsWritten++;
         }
 
         public void WriteBits(IMyList<bool> bits)
