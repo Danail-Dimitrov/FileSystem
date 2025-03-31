@@ -9,5 +9,9 @@
         /// <param name="source">The real file on the pc.</param>
         /// <param name="destination">The destination in the container</param>
         void CopyIn(string source, string destination);
+
+        void CopyOut(string source, string destination);
+
+        void CD(string path);
     }
 }

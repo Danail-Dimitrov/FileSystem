@@ -11,10 +11,10 @@ namespace FileSystem.Engine.FileSystemEngine.ContainerElements
         public uint FirstBlockId { get; set; }
         // The block of the parent directory
         public uint ParentBlockId { get; set; }
-        // Only for files
-        public uint Size { get; set; }
         public bool IsFolder { get; set; }
         // Only for folders
         public uint ChildrenCount { get; set; }
+
+        public int SizeInBytes => NameLenght + sizeof(int) + sizeof(uint) + sizeof(uint) + sizeof(bool) + sizeof(uint) + sizeof(long); // Date is written in long
     }
 }

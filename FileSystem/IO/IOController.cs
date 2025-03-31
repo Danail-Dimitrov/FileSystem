@@ -19,6 +19,12 @@
             Console.WriteLine("  md <name> - Create directory");
             Console.WriteLine("  cd <path> - Change directory");
             Console.WriteLine("  rd <name> - Remove directory");
+            Console.WriteLine("  q - Exit the application");
+        }
+
+        public static string GetInput()
+        {
+            return Console.ReadLine();
         }
     }
 }

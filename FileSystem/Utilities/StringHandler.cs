@@ -65,5 +65,21 @@
 
             return 0;
         }
+
+        public static (string, string) SplitByLastOccurrence(string input, char separator)
+        {
+            if (string.IsNullOrEmpty(input))
+                return (string.Empty, string.Empty);
+
+            int lastIndex = input.LastIndexOf(separator);
+
+            if (lastIndex == -1)
+                return (input, string.Empty);
+
+            string firstPart = input.Substring(0, lastIndex);
+            string secondPart = input.Substring(lastIndex + 1);
+
+            return (firstPart, secondPart);
+        }
     }
 }

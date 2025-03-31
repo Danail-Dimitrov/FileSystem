@@ -231,5 +231,27 @@ namespace FileSystem.Compression
 
             return frequencies;
         }
-    }
+
+        public static HuffmanNode DeserializeTree(byte[] treeData)
+        {
+            BitReader reader = new BitReader(treeData);
+            bool isLeaf = reader.ReadBit();
+
+            if (isLeaf)
+            {
+                // Leaf node - read the symbol (8 bits)
+                byte symbol = 0;
+                for (int i = 7; i >= 0; i--)
+                    if (reader.ReadBit())
+                        symbol |= (byte)(1 << i);
+
+                return new HuffmanNode(symbol, 0); // Frequency not needed for decompression
+            }
+            else
+            {
+                HuffmanNode left = DeserializeTree(reader);
+                HuffmanNode right = DeserializeTree(reader);
+                return new HuffmanNode(left, right);
+            }
+        }
 }
