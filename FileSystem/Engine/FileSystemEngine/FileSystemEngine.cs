@@ -1,17 +1,13 @@
 ﻿using FileSystem.Compression;
-using FileSystem.Compression.BitUtils;
 using FileSystem.Constants;
 using FileSystem.DataStructures.List;
 using FileSystem.Engine.FileSystemEngine.ContainerElements;
 using FileSystem.Utilities;
-using System.IO;
-using System.Reflection.Metadata;
-using System.Reflection.PortableExecutable;
 using System.Text;
 
 namespace FileSystem.Engine.FileSystemEngine
 {
-    // While implementing this class I used claude.ai for research and ideas.
+    // While implementing this class I used claude.ai for research, ideas and help with the implementation.
     /// <summary>
     /// This class is responsible for the file system operations.
     /// </summary>
@@ -45,6 +41,8 @@ namespace FileSystem.Engine.FileSystemEngine
         /// <param name="destination">The destination in the container</param>
         public void CopyIn(string source, string destination)
         {
+            WriteContainerContnet();
+
             Element originalCurrent = _currentDir;
 
             if (!File.Exists(source))
@@ -53,8 +51,6 @@ namespace FileSystem.Engine.FileSystemEngine
             var destInfo = StringHandler.SplitByLastOccurrence(destination, '/');
             CD(destInfo.Item1);
             string fileName = destInfo.Item2;
-
-            FileInfo fileInfo = new FileInfo(source);
 
             if (FileExistsInCurrentDirectory(fileName))
                 throw new IOException($"A file with name '{fileName}' already exists in the current directory");
@@ -121,18 +117,169 @@ namespace FileSystem.Engine.FileSystemEngine
                 AddElementAsChild(_currentDir.FirstBlockId, fileEntry.FirstBlockId);
 
                 _currentDir = originalCurrent;
+
+                WriteContainerContnet();
             }
-            catch(Exception ex)
+            catch (Exception)
             {
                 DeleteFile(fileEntry);
                 _currentDir = originalCurrent;
-                throw ex;
+                throw;
             }
         }
 
+        private void WriteContainerContnet()
+        {
+            Console.WriteLine("Container Content:");
+
+            // Read and display header information
+            _containerStream.Seek(0, SeekOrigin.Begin);
+
+            using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
+            {
+
+                uint magicNumber = reader.ReadUInt32();
+                ushort version = reader.ReadUInt16();
+                uint blockSize = reader.ReadUInt32();
+                uint headerSize = reader.ReadUInt32();
+                uint nextAvailableBlock = reader.ReadUInt32();
+
+
+                // Display header information
+                Console.WriteLine("Header Information:");
+                Console.WriteLine($"  Magic Number: 0x{magicNumber:X8}");
+                Console.WriteLine($"  Version: {version}");
+                Console.WriteLine($"  Block Size: {blockSize} bytes");
+                Console.WriteLine($"  Header Size: {headerSize} bytes");
+                Console.WriteLine($"  Next Available Block ID: {nextAvailableBlock}");
+
+                Console.WriteLine();
+
+                // Display root directory information if available
+                if (_rootDirectory != null)
+                {
+                    // Read and display current blocks in use
+                    Console.WriteLine("\nAllocated Blocks:");
+
+                    for (uint j = 1; j < nextAvailableBlock; j++)
+                    {
+                        try
+                        {
+                            long blockOffset = CalculateBlockOffset(j);
+                            _containerStream.Seek(blockOffset, SeekOrigin.Begin);
+
+                            uint blockId = reader.ReadUInt32();
+                            byte status = reader.ReadByte();
+                            uint nextBlock = reader.ReadUInt32();
+                            uint dataLength = reader.ReadUInt32();
+
+                            if (status == 1) // Block is in use
+                            {
+                                Console.WriteLine($"  Block {blockId}:");
+                                Console.WriteLine($"    Status: Used");
+                                Console.WriteLine($"    Next Block: {nextBlock}");
+                                Console.WriteLine($"    Data Length: {dataLength} bytes");
+                                Console.WriteLine();
+
+                                int nameLength = reader.ReadInt32();
+                                byte[] nameBytes = reader.ReadBytes(nameLength);
+                                string name = Encoding.UTF8.GetString(nameBytes);
+                                DateTime creationTime = DateTime.FromBinary(reader.ReadInt64());
+                                uint firstBlockId = reader.ReadUInt32();
+                                uint parentBlockId = reader.ReadUInt32();
+                                bool isFolder = reader.ReadBoolean();
+                                uint childrenCount = reader.ReadUInt32();
+
+                                Console.WriteLine($"    Name: {name}");
+                                Console.WriteLine($"    Creation Time: {creationTime}");
+                                Console.WriteLine($"    First Block ID: {firstBlockId}");
+                                Console.WriteLine($"    Parent Block ID: {parentBlockId}");
+                                Console.WriteLine($"    Is Folder: {isFolder}");
+                                Console.WriteLine($"    Children Count: {childrenCount}");
+                            }
+
+                            Console.ReadLine();
+                        }
+                        catch
+                        {
+                            // Skip if we can't read this block
+                            Console.WriteLine($"  Block {j}: Failed to read");
+                        }
+                    }
+                }
+            }
+
+            Console.WriteLine("END");
+            Console.WriteLine();
+        }
+
+
+
         public void CD(string path)
         {
-            throw new NotImplementedException();
+            if (string.IsNullOrEmpty(path))
+                return;
+
+            if (path == "/")
+            {
+                _currentDir = _rootDirectory;
+                return;
+            }
+
+            // Determine if the path is absolute or relative
+            bool isAbsolute = path.StartsWith("/");
+            string[] pathComponents = StringHandler.SplitString(path, '/');
+            Element targetDir = isAbsolute ? _rootDirectory : _currentDir;
+
+            // Navigate through each component of the path
+            foreach (string component in pathComponents)
+            {
+                // Find the child directory with the matching name
+                Element childDir = FindChildDirectory(targetDir, component);
+
+                // Update the target directory
+                targetDir = childDir;
+            }
+
+            // Set the current directory to the target
+            _currentDir = targetDir;
+        }
+
+        private Element FindChildDirectory(Element directory, string name)
+        {
+            if (!directory.IsFolder)
+                throw new ArgumentException("Not a directory", nameof(directory));
+
+            uint childCount = directory.ChildrenCount;
+
+            if (childCount == 0)
+                throw new DirectoryNotFoundException($"Directory '{name}' not found");
+
+            long directoryOffset = CalculateBlockOffset(directory.FirstBlockId);
+            int metadataSize = directory.SizeInBytes;
+            long childrenListOffset = directoryOffset + BlockInfo.GetSize() + metadataSize;
+
+            // Seek directly to where the children IDs are stored
+            _containerStream.Seek(childrenListOffset, SeekOrigin.Begin);
+
+            using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
+            {
+                for (int i = 0; i < childCount; i++)
+                {
+                    uint childBlockId = reader.ReadUInt32();
+                    Element child = ReadDirectoryEntry(childBlockId);
+
+                    if (StringHandler.Compare(child.Name, name) == 0)
+                    {
+                        if (!child.IsFolder)
+                            throw new DirectoryNotFoundException($"'{name}' is not a directory");
+
+                        return child;
+                    }
+                }
+            }
+
+            throw new DirectoryNotFoundException($"Directory '{name}' not found");
         }
 
         public void CopyOut(string source, string destination)
@@ -233,7 +380,7 @@ namespace FileSystem.Engine.FileSystemEngine
             byte[] treeData = new byte[treeLength];
             int bytesRead = 0;
 
-            while(remainingBytes > 0)
+            while (remainingBytes > 0)
             {
                 if (currentOffset >= usableBlockSize)
                 {
@@ -298,7 +445,7 @@ namespace FileSystem.Engine.FileSystemEngine
                     uint childBlockId = reader.ReadUInt32();
                     Element child = ReadDirectoryEntry(childBlockId);
 
-                    if(StringHandler.Compare(child.Name, name) == 0)
+                    if (StringHandler.Compare(child.Name, name) == 0)
                         return child;
                 }
             }
@@ -337,6 +484,12 @@ namespace FileSystem.Engine.FileSystemEngine
 
             // Update the checksum for the directory block
             WriteBlockChecksum(directoryBlockId);
+
+            if (directoryBlockId == _currentDir.FirstBlockId)
+                _currentDir.ChildrenCount++;
+
+            else if (directoryBlockId == _rootDirectory.FirstBlockId)
+                _rootDirectory.ChildrenCount++;
         }
 
         /// <summary>
@@ -540,13 +693,11 @@ namespace FileSystem.Engine.FileSystemEngine
                 CreationTime = DateTime.Now,
                 FirstBlockId = AllocateBlock(1),
                 ParentBlockId = 0,
-                IsFolder = true
+                IsFolder = true,
+                ChildrenCount = 0
             };
 
             _currentDir = _rootDirectory;
-
-            long blockOffset = CalculateBlockOffset(_rootDirectory.FirstBlockId);
-            _containerStream.Seek(blockOffset, SeekOrigin.Begin);
 
             CreateElement(_rootDirectory);
         }
@@ -554,7 +705,7 @@ namespace FileSystem.Engine.FileSystemEngine
         private void CreateElement(Element folder)
         {
             long blockOffset = CalculateBlockOffset(folder.FirstBlockId);
-            _containerStream.Seek(blockOffset + BlockInfo.GetSize(), SeekOrigin.Begin);
+            _containerStream.Seek(blockOffset + BlockInfo.GetSizeWithoutChecksum(), SeekOrigin.Begin);
             long dataStartPosition = _containerStream.Position;
 
             byte[] nameBytes = Encoding.UTF8.GetBytes(folder.Name);
@@ -572,6 +723,7 @@ namespace FileSystem.Engine.FileSystemEngine
             }
 
             uint bitesWritten = (uint)(_containerStream.Position - dataStartPosition);
+
             UpdateBlockContentLenght(folder.FirstBlockId, bitesWritten);
 
             WriteBlockChecksum(folder.FirstBlockId);
@@ -581,7 +733,7 @@ namespace FileSystem.Engine.FileSystemEngine
         {
             long blockOffset = CalculateBlockOffset(firstBlockId);
 
-            _containerStream.Seek(blockOffset + 8, SeekOrigin.Begin);
+            _containerStream.Seek(blockOffset + BlockInfo.GetContentLenghtPosition(), SeekOrigin.Begin);
 
             using (var writer = new BinaryWriter(_containerStream, Encoding.UTF8, leaveOpen: true))
             {

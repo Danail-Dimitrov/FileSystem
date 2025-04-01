@@ -6,7 +6,7 @@ namespace FileSystem.Commands
     {
         public override void Execute(IFileSystemEngine fsEngine, string[] args)
         {
-            fsEngine.CopyIn(args[0], args[1]);
+            fsEngine.CopyIn(args[1], args[2]);
         }
     }
 }

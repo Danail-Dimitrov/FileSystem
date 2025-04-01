@@ -74,7 +74,7 @@ namespace FileSystem.Compression
                     // Skip tree size.
                     // We don't need it for decompression
                     // Only for calculating how many blocks to read from in the engine
-                    reader.ReadInt32(); 
+                    reader.ReadInt32();
 
                     byte[] compressedBody = reader.ReadBytes(compressedBodyLength);
 
@@ -214,7 +214,7 @@ namespace FileSystem.Compression
                 nodes.Add(parent);
             }
 
-                return nodes[0];
+            return nodes[0];
         }
 
         private static MyDictionary<byte, int> BuildFrequencyTable(byte[] data)
@@ -254,4 +254,5 @@ namespace FileSystem.Compression
                 return new HuffmanNode(left, right);
             }
         }
+    }
 }

@@ -28,7 +28,17 @@
 
         public static uint GetSize()
         {
-            return (uint)(sizeof(uint) + sizeof(uint) + sizeof(bool) + sizeof(uint) + ChecksumLength);
+            return sizeof(uint) + sizeof(uint) + sizeof(bool) + sizeof(uint) + ChecksumLength;
+        }
+
+        public static uint GetContentLenghtPosition()
+        {
+            return sizeof(uint) + sizeof(bool) + sizeof(uint);
+        }
+
+        public static uint GetSizeWithoutChecksum()
+        {
+            return sizeof(uint) + sizeof(uint) + sizeof(bool) + sizeof(uint);
         }
     }
 }

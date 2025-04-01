@@ -2,11 +2,11 @@
 
 namespace FileSystem.Commands
 {
-    public class CopyOutCommand : Command
+    public class CDCommand : Command
     {
         public override void Execute(IFileSystemEngine fsEngine, string[] args)
         {
-            fsEngine.CopyOut(args[1], args[2]);
+            fsEngine.CD(args[1]);
         }
     }
 }

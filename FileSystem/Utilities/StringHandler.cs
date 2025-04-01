@@ -74,7 +74,7 @@
             int lastIndex = input.LastIndexOf(separator);
 
             if (lastIndex == -1)
-                return (input, string.Empty);
+                return (string.Empty, input);
 
             string firstPart = input.Substring(0, lastIndex);
             string secondPart = input.Substring(lastIndex + 1);

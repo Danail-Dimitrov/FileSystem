@@ -13,7 +13,8 @@ namespace FileSystem.Engine.ApplicationEngine
     {
         private IFileSystemEngine _fsEngine;
         private Command  _cin;
-        private Command _cout;
+        private Command _cpout;
+        private Command _cd;
 
         public ApplicationEngine(IFileSystemEngine engine)
         {
@@ -25,7 +26,8 @@ namespace FileSystem.Engine.ApplicationEngine
         private void InitComands()
         {
             _cin = new CopyInCommand();
-            _cout = new CopyOutCommand();
+            _cpout = new CopyOutCommand();
+            _cd = new CDCommand();
         }
 
         /// <summary>
@@ -68,7 +70,7 @@ namespace FileSystem.Engine.ApplicationEngine
                         _cin.Execute(_fsEngine, args);
                         break;
                     case "cpout":
-                        _cout.Execute(_fsEngine, args);
+                        _cpout.Execute(_fsEngine, args);
                         break;
                     case "ls":
                         break;
@@ -77,6 +79,7 @@ namespace FileSystem.Engine.ApplicationEngine
                     case "md":
                         break;
                     case "cd":
+                        _cd.Execute(_fsEngine, args);
                         break;
                     case "rd":
                         break;
