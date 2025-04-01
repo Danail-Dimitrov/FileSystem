@@ -2,6 +2,7 @@
 using FileSystem.Constants;
 using FileSystem.DataStructures.List;
 using FileSystem.Engine.FileSystemEngine.ContainerElements;
+using FileSystem.IO;
 using FileSystem.Utilities;
 using System.Text;
 
@@ -66,7 +67,7 @@ namespace FileSystem.Engine.FileSystemEngine
             // Compress the file data
             byte[] compressedData = HuffmanCompression.Compress(fileData);
 
-            uint usableBlockSize = FileSystemConstants.BlockSize - BlockInfo.GetSizeWithoutChecksum();
+            uint usableBlockSize = FileSystemConstants.BlockSize - BlockInfo.GetSize();
             long fileSize = compressedData.Length;
             uint blocksNeeded = (uint)Math.Ceiling((double)fileSize / usableBlockSize);
 
@@ -174,7 +175,57 @@ namespace FileSystem.Engine.FileSystemEngine
 
         public void List()
         {
-            throw new NotImplementedException();
+            IOController.Print("Files in container");
+
+            TraverseDirectory(_rootDirectory);
+        }
+
+        private void TraverseDirectory(Element directory)
+        {
+            if (!directory.IsFolder)
+                return;
+
+            // Get all children of this directory
+            MyList<Element> children = GetChildDirectoryEntries(directory);
+
+            foreach (Element child in children)
+            {
+                if (child.IsFolder)
+                    TraverseDirectory(child);
+                else
+                {
+                    // It's a file, so list it
+                    long fileSize = GetOriginalFileSize(child);
+                    IOController.Print($"{child.Name} ({fileSize} bytes)");
+                }
+            }
+        }
+
+        private long GetOriginalFileSize(Element element)
+        {
+            if (element.IsFolder)
+                return 0;
+
+            try
+            {
+                long blockOffset = CalculateBlockOffset(element.FirstBlockId);
+                _containerStream.Seek(blockOffset + BlockInfo.GetSizeWithoutChecksum() + element.SizeInBytes, SeekOrigin.Begin);
+
+                // Read the original size (first integer in the compressed data header)
+                using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
+                {
+                    reader.ReadInt32(); // Skip original size
+                    int compressedSize = reader.ReadInt32();
+                    int treeSize = reader.ReadInt32();
+                    return compressedSize + treeSize;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the error but continue processing
+                Console.WriteLine($"Warning: Could not read size for file {element.Name}: {ex.Message}");
+                return 0;
+            }
         }
 
         private Element FindChildDirectory(Element directory, string name)
@@ -397,7 +448,7 @@ namespace FileSystem.Engine.FileSystemEngine
                 writer.Write(directory.ChildrenCount);
 
                 // Seek to the end of the existing children list to append the new child
-                _containerStream.Seek(directory.ChildrenCount * sizeof(uint) - sizeof(uint), SeekOrigin.Current);
+                _containerStream.Seek((directory.ChildrenCount - 1) * sizeof(uint), SeekOrigin.Current);
 
                 // Write the new child block ID
                 writer.Write(elementBlockId);
@@ -448,35 +499,24 @@ namespace FileSystem.Engine.FileSystemEngine
         {
             Element element = new Element();
 
-            // Calculate the offset for this block
             long offset = CalculateBlockOffset(blockId);
 
-            // Verify block checksum before reading
             if (!VerifyBlockChecksum(blockId))
                 throw new InvalidDataException($"Block {blockId} failed checksum verification");
 
-            // Position the stream at the start of the block
             _containerStream.Seek(offset + BlockInfo.GetSizeWithoutChecksum(), SeekOrigin.Begin);
 
-            // Read element data directly from the stream
             using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
             {
-                // Read entry name
                 int nameLength = reader.ReadInt32();
                 byte[] nameBytes = reader.ReadBytes(nameLength);
                 element.Name = Encoding.UTF8.GetString(nameBytes);
 
-                // Read entry metadata
                 element.CreationTime = DateTime.FromBinary(reader.ReadInt64());
                 element.FirstBlockId = reader.ReadUInt32();
                 element.ParentBlockId = reader.ReadUInt32();
                 element.IsFolder = reader.ReadBoolean();
-
-                if (element.IsFolder)
-                    // For directories, read the children count
-                    element.ChildrenCount = reader.ReadUInt32();
-                else
-                    element.ChildrenCount = 0; // Files don't have children
+                element.ChildrenCount = reader.ReadUInt32();
             }
 
             return element;
@@ -795,9 +835,9 @@ namespace FileSystem.Engine.FileSystemEngine
 
         private bool IsBlockFree(uint blockId)
         {
-            long batOffset = FileSystemConstants.HeaderSize + (blockId - 1);
+            long blockOffset = CalculateBlockOffset(blockId);
 
-            _containerStream.Seek(batOffset, SeekOrigin.Begin);
+            _containerStream.Seek(blockOffset + BlockInfo.GetStatusPosition(), SeekOrigin.Begin);
             int status = _containerStream.ReadByte();
 
             return status == 0;
@@ -895,13 +935,11 @@ namespace FileSystem.Engine.FileSystemEngine
             int metadataSize = directory.SizeInBytes;
             long childrenListOffset = directoryOffset + BlockInfo.GetSizeWithoutChecksum() + metadataSize;
 
-            // Seek directly to where the children IDs are stored
-            _containerStream.Seek(childrenListOffset, SeekOrigin.Begin);
-
             using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
             {
                 for (int i = 0; i < childCount; i++)
                 {
+                    _containerStream.Seek(childrenListOffset + i * sizeof(uint), SeekOrigin.Begin);
                     uint childBlockId = reader.ReadUInt32();
                     entries.Add(ReadDirectoryEntry(childBlockId));
                 }
@@ -1006,6 +1044,19 @@ namespace FileSystem.Engine.FileSystemEngine
                             Console.WriteLine($"    Parent Block ID: {parentBlockId}");
                             Console.WriteLine($"    Is Folder: {isFolder}");
                             Console.WriteLine($"    Children Count: {childrenCount}");
+
+                            if (isFolder && childrenCount > 0)
+                            {
+                                Console.WriteLine($"    Children:");
+
+                                // Read the children block IDs
+                                for (int i = 0; i < childrenCount; i++)
+                                {
+                                    uint childBlockId = reader.ReadUInt32();
+
+                                    Console.WriteLine($"      Child {i + 1}: Block {childBlockId}");
+                                }
+                            }
                         }
 
                         Console.ReadLine();

@@ -26,5 +26,10 @@
         {
             return Console.ReadLine();
         }
+
+        public static void Print(string message)
+        {
+            Console.WriteLine(message);
+        }
     }
 }

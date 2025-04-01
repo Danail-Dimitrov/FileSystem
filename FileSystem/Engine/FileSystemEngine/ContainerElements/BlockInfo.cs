@@ -40,5 +40,10 @@
         {
             return sizeof(uint) + sizeof(uint) + sizeof(bool) + sizeof(uint);
         }
+
+        public static uint GetStatusPosition()
+        {
+            return sizeof(uint);
+        }
     }
 }
