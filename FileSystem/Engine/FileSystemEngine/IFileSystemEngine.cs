@@ -13,5 +13,6 @@
         void CopyOut(string source, string destination);
 
         void CD(string path);
+        void List();
     }
 }

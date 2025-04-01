@@ -31,12 +31,14 @@ namespace FileSystem.Compression
 
             MyDictionary<byte, MyList<bool>> codeTable = BuildCodeTable(root);
 
+            BitWriter treeWriter = new BitWriter();
+
+            SerializeTree(root, treeWriter);
+
+            treeWriter.Flush();
+            byte[] treeData = treeWriter.ToArray();
+
             BitWriter bitWriter = new BitWriter();
-
-            SerializeTree(root, bitWriter);
-
-            int treeSize = bitWriter.BitsWritten;
-
             EncodeData(data, codeTable, bitWriter);
 
             byte[] compressedBody = bitWriter.ToArray();
@@ -49,7 +51,9 @@ namespace FileSystem.Compression
 
                     writer.Write(compressedBody.Length);
 
-                    writer.Write(treeSize);
+                    writer.Write(treeData.Length);
+
+                    writer.Write(treeData);
 
                     writer.Write(compressedBody);
                 }
@@ -66,35 +70,29 @@ namespace FileSystem.Compression
                 {
                     int originalLength = reader.ReadInt32();
 
-                    if (originalLength == 0)
-                        return [];
+                    int treeSizeInBytes = reader.ReadInt32();
+                    int compressedDataSizeInBytes = reader.ReadInt32();
 
-                    int compressedBodyLength = reader.ReadInt32();
+                    byte[] treeData = reader.ReadBytes(treeSizeInBytes);
+                    byte[] compressedBody = reader.ReadBytes(compressedDataSizeInBytes);
 
-                    // Skip tree size.
-                    // We don't need it for decompression
-                    // Only for calculating how many blocks to read from in the engine
-                    reader.ReadInt32();
-
-                    byte[] compressedBody = reader.ReadBytes(compressedBodyLength);
+                    BitReader treeBitReader = new BitReader(treeData);
+                    HuffmanNode root = DeserializeTree(treeBitReader);
 
                     // Create a bit reader for the compressed body
-                    BitReader bitReader = new BitReader(compressedBody);
-                    HuffmanNode root = DeserializeTree(bitReader);
-
-                    // Decode the data
+                    BitReader dataBitReader = new BitReader(compressedBody);
                     byte[] decompressedData = new byte[originalLength];
                     int index = 0;
 
-                    while (index < originalLength && bitReader.HasMoreBits)
+                    while (index < originalLength && dataBitReader.HasMoreBits)
                     {
                         // Start from the root for each symbol
                         HuffmanNode current = root;
 
                         // Traverse the tree until a leaf node is reached
-                        while (!current.IsLeaf && bitReader.HasMoreBits)
+                        while (!current.IsLeaf && dataBitReader.HasMoreBits)
                         {
-                            bool bit = bitReader.ReadBit();
+                            bool bit = dataBitReader.ReadBit();
                             current = bit ? current.Right : current.Left;
                         }
 
@@ -147,7 +145,10 @@ namespace FileSystem.Compression
 
                 // Write the only symbol (8 bits) of whitch the text is composed
                 for (int i = 7; i >= 0; i--)
-                    writer.WriteBit((node.Value & (1 << i)) != 0);
+                {
+                    bool bit = ((node.Value & (1 << i)) != 0);
+                    writer.WriteBit(bit);
+                }
             }
             else
             {
