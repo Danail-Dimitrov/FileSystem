@@ -27,9 +27,14 @@
             return Console.ReadLine();
         }
 
-        public static void Print(string message)
+        public static void PrintLine(string message)
         {
             Console.WriteLine(message);
+        }
+
+        public static void Print(string message)
+        {
+            Console.Write(message);
         }
     }
 }

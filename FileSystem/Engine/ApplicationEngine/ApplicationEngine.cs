@@ -16,6 +16,8 @@ namespace FileSystem.Engine.ApplicationEngine
         private Command _cpout;
         private Command _cd;
         private Command _ls;
+        private Command _rm;
+        private Command _info;
 
         public ApplicationEngine(IFileSystemEngine engine)
         {
@@ -30,6 +32,7 @@ namespace FileSystem.Engine.ApplicationEngine
             _cpout = new CopyOutCommand();
             _cd = new CDCommand();
             _ls = new ListCommand();
+            _info = new InfoCommand();
         }
 
         /// <summary>
@@ -63,6 +66,8 @@ namespace FileSystem.Engine.ApplicationEngine
         {
             while (IsRunning)
             {
+                IOController.Print(">" );
+
                 string command = IOController.GetInput();
                 string[] args = StringHandler.SplitString(command, ' ');
 
@@ -78,6 +83,7 @@ namespace FileSystem.Engine.ApplicationEngine
                         _ls.Execute(_fsEngine, args);
                         break;
                     case "rm":
+                        _rm.Execute(_fsEngine, args);
                         break;
                     case "md":
                         break;
@@ -85,6 +91,9 @@ namespace FileSystem.Engine.ApplicationEngine
                         _cd.Execute(_fsEngine, args);
                         break;
                     case "rd":
+                        break;
+                    case "info":
+                        _info.Execute(_fsEngine, args);
                         break;
                     case "q":
                         IsRunning = false;

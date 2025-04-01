@@ -14,5 +14,8 @@
 
         void CD(string path);
         void List();
+
+        void RemoveFile(string path);
+        void WriteContainerContnet(int blocksCount = -1);
     }
 }

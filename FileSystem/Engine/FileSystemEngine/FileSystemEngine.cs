@@ -175,9 +175,235 @@ namespace FileSystem.Engine.FileSystemEngine
 
         public void List()
         {
-            IOController.Print("Files in container");
+            IOController.PrintLine("Files in container");
 
             TraverseDirectory(_rootDirectory);
+        }
+
+        public void RemoveFile(string path)
+        {
+            Element originalCurrent = _currentDir;
+
+            var pathInfo = StringHandler.SplitByLastOccurrence(path, '/');
+            CD(pathInfo.Item1);
+            string fileName = pathInfo.Item2;
+
+            Element fileToRemove = null;
+            MyList<Element> entries = GetChildDirectoryEntries(_currentDir);
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (StringHandler.Compare(entries[i].Name, fileName) == 0)
+                {
+                    fileToRemove = entries[i];
+                    break;
+                }
+            }
+
+            if (fileToRemove == null)
+                throw new FileNotFoundException($"File '{fileName}' not found in directory '{pathInfo.Item1}'");
+
+            if (fileToRemove.IsFolder)
+                throw new IOException($"'{fileName}' is a directory, not a file. Use RemoveDirectory instead.");
+
+            RemoveChildFromDirectory(_currentDir, fileToRemove.FirstBlockId);
+
+            FreeFileBlocks(fileToRemove.FirstBlockId);
+
+            _currentDir = originalCurrent;
+        }
+
+         public void WriteContainerContnet(int blocksCount = -1)
+        {
+            Console.WriteLine("Container Content:");
+
+            // Read and display header information
+            _containerStream.Seek(0, SeekOrigin.Begin);
+
+            using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
+            {
+
+                uint magicNumber = reader.ReadUInt32();
+                ushort version = reader.ReadUInt16();
+                uint blockSize = reader.ReadUInt32();
+                uint headerSize = reader.ReadUInt32();
+                uint nextAvailableBlock = reader.ReadUInt32();
+
+
+                // Display header information
+                Console.WriteLine("Header Information:");
+                Console.WriteLine($"  Magic Number: 0x{magicNumber:X8}");
+                Console.WriteLine($"  Version: {version}");
+                Console.WriteLine($"  Block Size: {blockSize} bytes");
+                Console.WriteLine($"  Header Size: {headerSize} bytes");
+                Console.WriteLine($"  Next Available Block ID: {nextAvailableBlock}");
+
+                Console.WriteLine();
+
+                if (blocksCount == -1)
+                    blocksCount = (int)nextAvailableBlock;
+
+                // Read and display current blocks in use
+                Console.WriteLine("\nAllocated Blocks:");
+
+                for (uint j = 1; j < blocksCount; j++)
+                {
+                    try
+                    {
+                        long blockOffset = CalculateBlockOffset(j);
+                        _containerStream.Seek(blockOffset, SeekOrigin.Begin);
+
+                        uint blockId = reader.ReadUInt32();
+                        byte status = reader.ReadByte();
+                        uint nextBlock = reader.ReadUInt32();
+                        uint dataLength = reader.ReadUInt32();
+
+                        if (status == 1) // Block is in use
+                        {
+                            Console.WriteLine($"  Block {blockId}:");
+                            Console.WriteLine($"    Status: Used");
+                            Console.WriteLine($"    Next Block: {nextBlock}");
+                            Console.WriteLine($"    Data Length: {dataLength} bytes");
+                            Console.WriteLine();
+
+                            int nameLength = reader.ReadInt32();
+                            byte[] nameBytes = reader.ReadBytes(nameLength);
+                            string name = Encoding.UTF8.GetString(nameBytes);
+                            DateTime creationTime = DateTime.FromBinary(reader.ReadInt64());
+                            uint firstBlockId = reader.ReadUInt32();
+                            uint parentBlockId = reader.ReadUInt32();
+                            bool isFolder = reader.ReadBoolean();
+                            uint childrenCount = reader.ReadUInt32();
+
+                            Console.WriteLine($"    Name: {name}");
+                            Console.WriteLine($"    Creation Time: {creationTime}");
+                            Console.WriteLine($"    First Block ID: {firstBlockId}");
+                            Console.WriteLine($"    Parent Block ID: {parentBlockId}");
+                            Console.WriteLine($"    Is Folder: {isFolder}");
+                            Console.WriteLine($"    Children Count: {childrenCount}");
+
+                            if (isFolder && childrenCount > 0)
+                            {
+                                Console.WriteLine($"    Children:");
+
+                                // Read the children block IDs
+                                for (int i = 0; i < childrenCount; i++)
+                                {
+                                    uint childBlockId = reader.ReadUInt32();
+
+                                    Console.WriteLine($"      Child {i + 1}: Block {childBlockId}");
+                                }
+                            }
+                        }
+
+                        Console.ReadLine();
+                    }
+                    catch
+                    {
+                        // Skip if we can't read this block
+                        Console.WriteLine($"  Block {j}: Failed to read");
+                    }
+                }
+            }
+
+            Console.WriteLine("END");
+            Console.WriteLine();
+        }
+
+        private void FreeFileBlocks(uint firstBlockId)
+        {
+            uint currentBlockId = firstBlockId;
+
+            while (currentBlockId != 0)
+            {
+                uint nextBlockId = GetNextBlockId(currentBlockId);
+                MarkBlockAsFree(currentBlockId);
+                currentBlockId = nextBlockId;
+            }
+        }
+
+        private void MarkBlockAsFree(uint blockId)
+        {
+            long blockOffset = CalculateBlockOffset(blockId);
+
+            _containerStream.Seek(blockOffset + BlockInfo.GetStatusPosition(), SeekOrigin.Begin);
+
+            using (BinaryWriter writer = new BinaryWriter(_containerStream, Encoding.UTF8, true))
+            {
+                // Status
+                writer.Write((byte)0);
+
+                // Next
+                writer.Write((uint)0);
+
+                // Lenght
+                writer.Write((uint)0);
+            }
+
+            uint dataSize = FileSystemConstants.BlockSize - BlockInfo.GetSize();
+            byte[] emptyData = new byte[dataSize];
+
+            _containerStream.Seek(blockOffset + BlockInfo.GetSizeWithoutChecksum(), SeekOrigin.Begin);
+            _containerStream.Write(emptyData, 0, emptyData.Length);
+
+            WriteBlockChecksum(blockId);
+        }
+
+        private void RemoveChildFromDirectory(Element directory, uint childBlockId)
+        {
+            long directoryOffset = CalculateBlockOffset(directory.FirstBlockId);
+            int metadataSize = directory.SizeInBytes;
+            long childrenListOffset = directoryOffset + BlockInfo.GetSizeWithoutChecksum() + metadataSize - sizeof(uint); // 
+
+            _containerStream.Seek(childrenListOffset, SeekOrigin.Begin);
+
+            using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
+            {
+                uint childrenCount = reader.ReadUInt32();
+
+                uint[] childBlockIds = new uint[childrenCount];
+                int indexToRemove = -1;
+                for (int i = 0; i < childrenCount; i++)
+                {
+                    childBlockIds[i] = reader.ReadUInt32();
+                    if(childBlockIds[i] == childBlockId)
+                        indexToRemove = i;
+                }
+
+                if (indexToRemove == -1)
+                    throw new IOException("Child not found in directory");
+
+                uint[] newChildBlockIds = new uint[childrenCount - 1];
+                int newIndex = 0;
+
+                for (int i = 0; i < childrenCount; i++)
+                    if (i != indexToRemove)
+                        newChildBlockIds[newIndex++] = childBlockIds[i];
+
+                // Update directory's children count and write the new children list
+                directory.ChildrenCount--;
+
+                _containerStream.Seek(childrenListOffset, SeekOrigin.Begin);
+
+                using (BinaryWriter writer = new BinaryWriter(_containerStream, Encoding.UTF8, true))
+                {
+                    writer.Write(directory.ChildrenCount);
+
+                    // Write the new children list
+                    for (int i = 0; i < directory.ChildrenCount; i++)
+                    {
+                        writer.Write(newChildBlockIds[i]);
+                    }
+                }
+            }
+
+            // Update the checksum for the directory block
+            WriteBlockChecksum(directory.FirstBlockId);
+
+            // Update in-memory objects if necessary
+            if (directory.FirstBlockId == _currentDir.FirstBlockId)
+                _currentDir.ChildrenCount--;
+            else if (directory.FirstBlockId == _rootDirectory.FirstBlockId)
+                _rootDirectory.ChildrenCount--;
         }
 
         private void TraverseDirectory(Element directory)
@@ -196,7 +422,7 @@ namespace FileSystem.Engine.FileSystemEngine
                 {
                     // It's a file, so list it
                     long fileSize = GetOriginalFileSize(child);
-                    IOController.Print($"{child.Name} ({fileSize} bytes)");
+                    IOController.PrintLine($"{child.Name} ({fileSize} bytes)");
                 }
             }
         }
@@ -974,103 +1200,6 @@ namespace FileSystem.Engine.FileSystemEngine
 
             // Update the block's checksum
             WriteBlockChecksum(blockId);
-        }
-
-        private void WriteContainerContnet(int blocksCount = -1)
-        {
-            Console.WriteLine("Container Content:");
-
-            // Read and display header information
-            _containerStream.Seek(0, SeekOrigin.Begin);
-
-            using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
-            {
-
-                uint magicNumber = reader.ReadUInt32();
-                ushort version = reader.ReadUInt16();
-                uint blockSize = reader.ReadUInt32();
-                uint headerSize = reader.ReadUInt32();
-                uint nextAvailableBlock = reader.ReadUInt32();
-
-
-                // Display header information
-                Console.WriteLine("Header Information:");
-                Console.WriteLine($"  Magic Number: 0x{magicNumber:X8}");
-                Console.WriteLine($"  Version: {version}");
-                Console.WriteLine($"  Block Size: {blockSize} bytes");
-                Console.WriteLine($"  Header Size: {headerSize} bytes");
-                Console.WriteLine($"  Next Available Block ID: {nextAvailableBlock}");
-
-                Console.WriteLine();
-
-                if (blocksCount == -1)
-                    blocksCount = (int)nextAvailableBlock;
-
-                // Read and display current blocks in use
-                Console.WriteLine("\nAllocated Blocks:");
-
-                for (uint j = 1; j < blocksCount; j++)
-                {
-                    try
-                    {
-                        long blockOffset = CalculateBlockOffset(j);
-                        _containerStream.Seek(blockOffset, SeekOrigin.Begin);
-
-                        uint blockId = reader.ReadUInt32();
-                        byte status = reader.ReadByte();
-                        uint nextBlock = reader.ReadUInt32();
-                        uint dataLength = reader.ReadUInt32();
-
-                        if (status == 1) // Block is in use
-                        {
-                            Console.WriteLine($"  Block {blockId}:");
-                            Console.WriteLine($"    Status: Used");
-                            Console.WriteLine($"    Next Block: {nextBlock}");
-                            Console.WriteLine($"    Data Length: {dataLength} bytes");
-                            Console.WriteLine();
-
-                            int nameLength = reader.ReadInt32();
-                            byte[] nameBytes = reader.ReadBytes(nameLength);
-                            string name = Encoding.UTF8.GetString(nameBytes);
-                            DateTime creationTime = DateTime.FromBinary(reader.ReadInt64());
-                            uint firstBlockId = reader.ReadUInt32();
-                            uint parentBlockId = reader.ReadUInt32();
-                            bool isFolder = reader.ReadBoolean();
-                            uint childrenCount = reader.ReadUInt32();
-
-                            Console.WriteLine($"    Name: {name}");
-                            Console.WriteLine($"    Creation Time: {creationTime}");
-                            Console.WriteLine($"    First Block ID: {firstBlockId}");
-                            Console.WriteLine($"    Parent Block ID: {parentBlockId}");
-                            Console.WriteLine($"    Is Folder: {isFolder}");
-                            Console.WriteLine($"    Children Count: {childrenCount}");
-
-                            if (isFolder && childrenCount > 0)
-                            {
-                                Console.WriteLine($"    Children:");
-
-                                // Read the children block IDs
-                                for (int i = 0; i < childrenCount; i++)
-                                {
-                                    uint childBlockId = reader.ReadUInt32();
-
-                                    Console.WriteLine($"      Child {i + 1}: Block {childBlockId}");
-                                }
-                            }
-                        }
-
-                        Console.ReadLine();
-                    }
-                    catch
-                    {
-                        // Skip if we can't read this block
-                        Console.WriteLine($"  Block {j}: Failed to read");
-                    }
-                }
-            }
-
-            Console.WriteLine("END");
-            Console.WriteLine();
         }
     }
 }
