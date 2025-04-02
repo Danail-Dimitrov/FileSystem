@@ -4,6 +4,7 @@ using FileSystem.DataStructures.List;
 using FileSystem.Engine.FileSystemEngine.ContainerElements;
 using FileSystem.IO;
 using FileSystem.Utilities;
+using System.IO;
 using System.Text;
 
 namespace FileSystem.Engine.FileSystemEngine
@@ -116,8 +117,6 @@ namespace FileSystem.Engine.FileSystemEngine
                 AddElementAsChild(_currentDir.FirstBlockId, fileEntry.FirstBlockId);
 
                 _currentDir = originalCurrent;
-
-                WriteContainerContnet();
             }
             catch (Exception)
             {
@@ -176,8 +175,6 @@ namespace FileSystem.Engine.FileSystemEngine
 
         public void CopyOut(string source, string destination)
         {
-            WriteContainerContnet();
-
             Element originalCurrent = _currentDir;
 
             var destInfo = StringHandler.SplitByLastOccurrence(source, '/');
@@ -224,7 +221,7 @@ namespace FileSystem.Engine.FileSystemEngine
 
             RemoveChildFromDirectory(_currentDir, fileToRemove.FirstBlockId);
 
-            FreeFileBlocks(fileToRemove.FirstBlockId);
+            FreeBlocks(fileToRemove.FirstBlockId);
 
             _currentDir = originalCurrent;
         }
@@ -270,6 +267,54 @@ namespace FileSystem.Engine.FileSystemEngine
 
                 CreateElement(dirEntry);
                 AddElementAsChild(_currentDir.FirstBlockId, dirEntry.FirstBlockId);
+
+                _currentDir = originalCurrent;
+            }
+            catch (Exception)
+            {
+                _currentDir = originalCurrent;
+                throw;
+            }
+        }
+
+        public void RemoveDir(string dirFullName)
+        {
+            Element originalCurrent = _currentDir;
+
+            try
+            {
+                if (dirFullName == "/" || dirFullName == ".")
+                    throw new IOException("Cannot remove the root directory or current directory");
+
+                var pathInfo = StringHandler.SplitByLastOccurrence(dirFullName, '/');
+                string parentPath = pathInfo.Item1;
+                string dirName = pathInfo.Item2;
+
+                CD(parentPath);
+
+                Element dirToRemove = null;
+                MyList<Element> entries = GetChildDirectoryEntries(_currentDir);
+
+                for (int i = 0; i < entries.Count; i++)
+                {
+                    if (StringHandler.Compare(entries[i].Name, dirName) == 0)
+                    {
+                        dirToRemove = entries[i];
+                        break;
+                    }
+                }
+
+                if (dirToRemove == null)
+                    throw new DirectoryNotFoundException($"Directory '{dirName}' not found in '{parentPath}'");
+
+                if (!dirToRemove.IsFolder)
+                    throw new IOException($"'{dirName}' is a file, not a directory. Use rm instead.");
+
+                RemoveDirectoryRecursive(dirToRemove);
+
+                RemoveChildFromDirectory(_currentDir, dirToRemove.FirstBlockId);
+
+                FreeBlocks(dirToRemove.FirstBlockId);
 
                 _currentDir = originalCurrent;
             }
@@ -377,7 +422,20 @@ namespace FileSystem.Engine.FileSystemEngine
             Console.WriteLine();
         }
 
-        private void FreeFileBlocks(uint firstBlockId)
+        private void RemoveDirectoryRecursive(Element directory)
+        {
+            MyList<Element> children = GetChildDirectoryEntries(directory);
+
+            foreach (Element child in children)
+            {
+                if (child.IsFolder)
+                    RemoveDirectoryRecursive(child);
+
+                FreeBlocks(child.FirstBlockId);
+            }
+        }
+
+        private void FreeBlocks(uint firstBlockId)
         {
             uint currentBlockId = firstBlockId;
 

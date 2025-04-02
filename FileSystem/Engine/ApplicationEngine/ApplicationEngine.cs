@@ -20,6 +20,7 @@ namespace FileSystem.Engine.ApplicationEngine
         private Command _info;
         private Command _path;
         private Command _md;
+        private Command _rd;
 
         public ApplicationEngine(IFileSystemEngine engine)
         {
@@ -38,6 +39,7 @@ namespace FileSystem.Engine.ApplicationEngine
             _rm = new RemoveFileCommand();
             _path = new PrintPathCommand();
             _md = new CreateDirectoryCommand();
+            _rd = new RemoveDirCommand();
         }
 
         /// <summary>
@@ -69,49 +71,65 @@ namespace FileSystem.Engine.ApplicationEngine
         /// </summary>
         private void RunLoop()
         {
-            while (IsRunning)
+            try
             {
-                IOController.Print("> ");
-
-                string command = IOController.GetInput();
-                string[] args = StringHandler.SplitString(command, ' ');
-
-                switch(args[0])
+                while (IsRunning)
                 {
-                    case "cpin":
-                        _cin.Execute(_fsEngine, args);
-                        break;
-                    case "cpout":
-                        _cpout.Execute(_fsEngine, args);
-                        break;
-                    case "ls":
-                        _ls.Execute(_fsEngine, args);
-                        break;
-                    case "rm":
-                        _rm.Execute(_fsEngine, args);
-                        break;
-                    case "md":
-                        _md.Execute(_fsEngine, args);
-                        break;
-                    case "cd":
-                        _cd.Execute(_fsEngine, args);
-                        break;
-                    case "rd":
-                        break;
-                    // This command is not meant for real use. I keep it for debugging purposes.
-                    case "info":
-                        _info.Execute(_fsEngine, args);
-                        break;
-                    case "path":
-                        _path.Execute(_fsEngine, args);
-                        break;
-                    case "q":
-                        IsRunning = false;
-                        break;
-                    default:
-                        Console.WriteLine("Invalid command.");
-                        break;
+                    IOController.Print("> ");
+
+                    string command = IOController.GetInput();
+                    string[] args = StringHandler.SplitString(command, ' ');
+
+                    ProcesComamnd(args);
                 }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+            }
+        }
+
+        private void ProcesComamnd(string[] args)
+        {
+            switch (args[0])
+            {
+                case "cpin":
+                    _cin.Execute(_fsEngine, args);
+                    break;
+                case "cpout":
+                    _cpout.Execute(_fsEngine, args);
+                    break;
+                case "ls":
+                    _ls.Execute(_fsEngine, args);
+                    break;
+                case "rm":
+                    _rm.Execute(_fsEngine, args);
+                    break;
+                case "md":
+                    _md.Execute(_fsEngine, args);
+                    break;
+                case "cd":
+                    _cd.Execute(_fsEngine, args);
+                    break;
+                case "rd":
+                    _rd.Execute(_fsEngine, args);
+                    break;
+                // This command is not meant for real use. I keep it for debugging purposes.
+                case "info":
+                    _info.Execute(_fsEngine, args);
+                    break;
+                case "path":
+                    _path.Execute(_fsEngine, args);
+                    break;
+                case "help":
+                    IOController.PrintInstructions();
+                    break;
+                case "q":
+                    IsRunning = false;
+                    break;
+                default:
+                    Console.WriteLine("Invalid command.");
+                    break;
             }
         }
     }

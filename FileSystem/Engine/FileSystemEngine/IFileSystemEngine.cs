@@ -23,5 +23,7 @@
         void PrintCurrentPath();
 
         void CraeteDir(string dirFullName);
+
+        void RemoveDir(string dirFullName);
     }
 }
