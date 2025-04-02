@@ -66,7 +66,7 @@ namespace FileSystem.Engine.ApplicationEngine
         {
             while (IsRunning)
             {
-                IOController.Print(">" );
+                IOController.Print("> ");
 
                 string command = IOController.GetInput();
                 string[] args = StringHandler.SplitString(command, ' ');
