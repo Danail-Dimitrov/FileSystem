@@ -33,6 +33,7 @@ namespace FileSystem.Engine.ApplicationEngine
             _cd = new CDCommand();
             _ls = new ListCommand();
             _info = new InfoCommand();
+            _rm = new RemoveFileCommand();
         }
 
         /// <summary>
@@ -92,6 +93,7 @@ namespace FileSystem.Engine.ApplicationEngine
                         break;
                     case "rd":
                         break;
+                    // This command is not meant for real use. I keep it for debugging purposes.
                     case "info":
                         _info.Execute(_fsEngine, args);
                         break;
