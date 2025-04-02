@@ -175,7 +175,7 @@ namespace FileSystem.Engine.FileSystemEngine
 
         public void List()
         {
-            IOController.PrintLine("Files in container");
+            IOController.PrintLine("All files in container");
 
             TraverseDirectory(_rootDirectory);
         }
@@ -212,7 +212,17 @@ namespace FileSystem.Engine.FileSystemEngine
             _currentDir = originalCurrent;
         }
 
-         public void WriteContainerContnet(int blocksCount = -1)
+        public void PrintCurrentPath()
+        {
+            string name = _currentDir.Name;
+
+            if (name == "")
+                name = "/";
+
+            IOController.PrintLine(name);
+        }
+
+        public void WriteContainerContnet(int blocksCount = -1)
         {
             Console.WriteLine("Container Content:");
 

@@ -17,5 +17,7 @@
 
         void RemoveFile(string path);
         void WriteContainerContnet(int blocksCount = -1);
+
+        void PrintCurrentPath();
     }
 }

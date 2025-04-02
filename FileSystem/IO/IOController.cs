@@ -19,6 +19,8 @@
             Console.WriteLine("  md <name> - Create directory");
             Console.WriteLine("  cd <path> - Change directory");
             Console.WriteLine("  rd <name> - Remove directory");
+            Console.WriteLine("  path - Print current path");
+            Console.WriteLine("  info - Prints info about all blocks and the header");
             Console.WriteLine("  q - Exit the application");
         }
 

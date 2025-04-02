@@ -18,6 +18,7 @@ namespace FileSystem.Engine.ApplicationEngine
         private Command _ls;
         private Command _rm;
         private Command _info;
+        private Command _path;
 
         public ApplicationEngine(IFileSystemEngine engine)
         {
@@ -34,6 +35,7 @@ namespace FileSystem.Engine.ApplicationEngine
             _ls = new ListCommand();
             _info = new InfoCommand();
             _rm = new RemoveFileCommand();
+            _path = new PrintPathCommand();
         }
 
         /// <summary>
@@ -96,6 +98,9 @@ namespace FileSystem.Engine.ApplicationEngine
                     // This command is not meant for real use. I keep it for debugging purposes.
                     case "info":
                         _info.Execute(_fsEngine, args);
+                        break;
+                    case "path":
+                        _path.Execute(_fsEngine, args);
                         break;
                     case "q":
                         IsRunning = false;
