@@ -536,13 +536,11 @@ namespace FileSystem.Engine.FileSystemEngine
             int metadataSize = directory.SizeInBytes;
             long childrenListOffset = directoryOffset + BlockInfo.GetSizeWithoutChecksum() + metadataSize;
 
-            // Seek directly to where the children IDs are stored
-            _containerStream.Seek(childrenListOffset, SeekOrigin.Begin);
-
             using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
             {
                 for (int i = 0; i < childCount; i++)
                 {
+                    _containerStream.Seek(childrenListOffset + i * sizeof(uint), SeekOrigin.Begin);
                     uint childBlockId = reader.ReadUInt32();
                     Element child = ReadDirectoryEntry(childBlockId);
 
