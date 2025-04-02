@@ -138,22 +138,39 @@ namespace FileSystem.Engine.FileSystemEngine
                 return;
             }
 
-            // Determine if the path is absolute or relative
+            if (path == ".")
+                return;
+
+            if (path == "..")
+            {
+                if (_currentDir.ParentBlockId == 0)
+                    return;
+
+                _currentDir = ReadDirectoryEntry(_currentDir.ParentBlockId);
+                return;
+            }
+
             bool isAbsolute = path.StartsWith("/");
             string[] pathComponents = StringHandler.SplitString(path, '/');
             Element targetDir = isAbsolute ? _rootDirectory : _currentDir;
 
-            // Navigate through each component of the path
             foreach (string component in pathComponents)
             {
-                // Find the child directory with the matching name
-                Element childDir = FindChildDirectory(targetDir, component);
+                if(component == ".")
+                    continue;
 
-                // Update the target directory
-                targetDir = childDir;
+                if (component == "..")
+                {
+                    if (targetDir.ParentBlockId == 0)
+                        continue;
+
+                    targetDir = ReadDirectoryEntry(targetDir.ParentBlockId);
+                    continue;
+                }
+
+                targetDir = FindChildDirectory(targetDir, component);
             }
 
-            // Set the current directory to the target
             _currentDir = targetDir;
         }
 
@@ -220,6 +237,47 @@ namespace FileSystem.Engine.FileSystemEngine
                 name = "/";
 
             IOController.PrintLine(name);
+        }
+
+        public void CraeteDir(string dirFullName)
+        {
+            Element originalCurrent = _currentDir;
+
+            try
+            {
+                var pathInfo = StringHandler.SplitByLastOccurrence(dirFullName, '/');
+                string parentPath = pathInfo.Item1;
+                string dirName = pathInfo.Item2;
+
+                CD(parentPath);
+
+                if (FileExistsInCurrentDirectory(dirName))
+                    throw new IOException($"A file or directory named '{dirName}' already exists");
+
+                uint blockId = AllocateBlock(1);
+                if (blockId == 0)
+                    throw new IOException("Failed to allocate block for the directory");
+
+                Element dirEntry = new Element
+                {
+                    Name = dirName,
+                    CreationTime = DateTime.Now,
+                    FirstBlockId = blockId,
+                    ParentBlockId = _currentDir.FirstBlockId,
+                    IsFolder = true,
+                    ChildrenCount = 0
+                };
+
+                CreateElement(dirEntry);
+                AddElementAsChild(_currentDir.FirstBlockId, dirEntry.FirstBlockId);
+
+                _currentDir = originalCurrent;
+            }
+            catch (Exception)
+            {
+                _currentDir = originalCurrent;
+                throw;
+            }
         }
 
         public void WriteContainerContnet(int blocksCount = -1)

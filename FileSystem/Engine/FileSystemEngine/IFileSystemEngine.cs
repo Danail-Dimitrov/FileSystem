@@ -13,11 +13,15 @@
         void CopyOut(string source, string destination);
 
         void CD(string path);
+
         void List();
 
         void RemoveFile(string path);
+
         void WriteContainerContnet(int blocksCount = -1);
 
         void PrintCurrentPath();
+
+        void CraeteDir(string dirFullName);
     }
 }

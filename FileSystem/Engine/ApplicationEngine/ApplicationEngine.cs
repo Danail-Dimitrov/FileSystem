@@ -19,6 +19,7 @@ namespace FileSystem.Engine.ApplicationEngine
         private Command _rm;
         private Command _info;
         private Command _path;
+        private Command _md;
 
         public ApplicationEngine(IFileSystemEngine engine)
         {
@@ -36,6 +37,7 @@ namespace FileSystem.Engine.ApplicationEngine
             _info = new InfoCommand();
             _rm = new RemoveFileCommand();
             _path = new PrintPathCommand();
+            _md = new CreateDirectoryCommand();
         }
 
         /// <summary>
@@ -89,6 +91,7 @@ namespace FileSystem.Engine.ApplicationEngine
                         _rm.Execute(_fsEngine, args);
                         break;
                     case "md":
+                        _md.Execute(_fsEngine, args);
                         break;
                     case "cd":
                         _cd.Execute(_fsEngine, args);
