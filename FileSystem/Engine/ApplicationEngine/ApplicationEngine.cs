@@ -12,7 +12,7 @@ namespace FileSystem.Engine.ApplicationEngine
     public class ApplicationEngine : IApplicationEngine
     {
         private IFileSystemEngine _fsEngine;
-        private Command  _cin;
+        private Command _cin;
         private Command _cpout;
         private Command _cd;
         private Command _ls;
@@ -71,9 +71,9 @@ namespace FileSystem.Engine.ApplicationEngine
         /// </summary>
         private void RunLoop()
         {
-            try
+            while (IsRunning)
             {
-                while (IsRunning)
+                try
                 {
                     IOController.Print("> ");
 
@@ -82,10 +82,10 @@ namespace FileSystem.Engine.ApplicationEngine
 
                     ProcesComamnd(args);
                 }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error: " + ex.Message);
+                catch (Exception e)
+                {
+                    IOController.PrintLine($"Exception: {e.Message}");
+                }
             }
         }
 

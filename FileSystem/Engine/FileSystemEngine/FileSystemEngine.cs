@@ -546,7 +546,6 @@ namespace FileSystem.Engine.FileSystemEngine
             if (!directory.IsFolder)
                 return;
 
-            // Get all children of this directory
             MyList<Element> children = GetChildDirectoryEntries(directory);
 
             foreach (Element child in children)
