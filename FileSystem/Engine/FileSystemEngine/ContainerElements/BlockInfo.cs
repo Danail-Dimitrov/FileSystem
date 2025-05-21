@@ -31,6 +31,11 @@
             return sizeof(uint) + sizeof(uint) + sizeof(bool) + sizeof(uint) + ChecksumLength;
         }
 
+        public static uint GetNextBlock()
+        {
+            return sizeof(uint) + sizeof(bool) + sizeof(uint);
+        }
+
         public static uint GetContentLenghtPosition()
         {
             return sizeof(uint) + sizeof(bool) + sizeof(uint);

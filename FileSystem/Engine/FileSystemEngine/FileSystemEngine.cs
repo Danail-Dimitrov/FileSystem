@@ -72,7 +72,7 @@ namespace FileSystem.Engine.FileSystemEngine
             long fileSize = compressedData.Length;
             uint blocksNeeded = (uint)Math.Ceiling((double)fileSize / usableBlockSize);
 
-            uint firstBlockId = AllocateBlock(blocksNeeded);
+            uint firstBlockId = AllocateBlocks(blocksNeeded);
 
             if (firstBlockId == 0)
                 throw new IOException("Failed to allocate blocks for the file");
@@ -96,9 +96,16 @@ namespace FileSystem.Engine.FileSystemEngine
                 int additionalOffset = fileEntry.SizeInBytes;
                 while (totalBytesWritten < compressedData.Length)
                 {
-                    int bytesToWrite = (int)Math.Min(usableBlockSize, compressedData.Length - totalBytesWritten);
+                    // In the first block we write the entry metada
+                    int bytesToWrite = (int)Math.Min(usableBlockSize - additionalOffset, compressedData.Length - totalBytesWritten);
 
                     WriteFileDataToBlock(currentBlockId, additionalOffset, compressedData, totalBytesWritten, bytesToWrite);
+
+                    uint currentBlockLenght = (uint)bytesToWrite;
+                    if(additionalOffset != 0)
+                        currentBlockLenght += (uint)additionalOffset;
+
+                    UpdateBlockContentLenght(currentBlockId, currentBlockLenght);
 
                     totalBytesWritten += bytesToWrite;
 
@@ -117,6 +124,8 @@ namespace FileSystem.Engine.FileSystemEngine
                 AddElementAsChild(_currentDir.FirstBlockId, fileEntry.FirstBlockId);
 
                 _currentDir = originalCurrent;
+
+                PrintAllocatedBlocks();
             }
             catch (Exception)
             {
@@ -251,7 +260,7 @@ namespace FileSystem.Engine.FileSystemEngine
                 if (FileExistsInCurrentDirectory(dirName))
                     throw new IOException($"A file or directory named '{dirName}' already exists");
 
-                uint blockId = AllocateBlock(1);
+                uint blockId = AllocateBlocks(1);
                 if (blockId == 0)
                     throw new IOException("Failed to allocate block for the directory");
 
@@ -1010,7 +1019,7 @@ namespace FileSystem.Engine.FileSystemEngine
             {
                 Name = "",
                 CreationTime = DateTime.Now,
-                FirstBlockId = AllocateBlock(1),
+                FirstBlockId = AllocateBlocks(1),
                 ParentBlockId = 0,
                 IsFolder = true,
                 ChildrenCount = 0
@@ -1048,6 +1057,7 @@ namespace FileSystem.Engine.FileSystemEngine
             WriteBlockChecksum(folder.FirstBlockId);
         }
 
+        //TODO when writting content to the block we must use addition. Not only content lenght but also the system block info
         private void UpdateBlockContentLenght(uint firstBlockId, uint bitesWritten)
         {
             long blockOffset = CalculateBlockOffset(firstBlockId);
@@ -1059,10 +1069,10 @@ namespace FileSystem.Engine.FileSystemEngine
                 writer.Write(bitesWritten);
             }
 
-            // Not updating checksum because this will only be called in methods that already will update it
+            WriteBlockChecksum(firstBlockId);
         }
 
-        private uint AllocateBlock(uint count)
+        private uint AllocateBlocks(uint count)
         {
             uint firstId = 0;
             uint prevId = 0;
@@ -1080,6 +1090,38 @@ namespace FileSystem.Engine.FileSystemEngine
             }
 
             return firstId;
+        }
+
+        //TODO debug method. Remove
+        public void PrintAllocatedBlocks()
+        {
+
+            IOController.PrintLine("Block Chain Information:");
+
+            // Start from block ID 1 (as IDs start at 1)
+            for (uint blockId = 1; blockId < _nextAvailableBlockId; blockId++)
+            {
+                long blockOffset = CalculateBlockOffset(blockId);
+
+                // Read block ID and next block ID directly from the container
+                _containerStream.Seek(blockOffset, SeekOrigin.Begin);
+
+                using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
+                {
+                    // Read the stored block ID
+                    uint storedBlockId = reader.ReadUInt32();
+
+                    // Read status (1 byte)
+                    byte status = reader.ReadByte();
+
+                    // Read next block ID
+                    uint nextBlockId = reader.ReadUInt32();
+                        
+                    IOController.PrintLine($"Block ID: {storedBlockId}, Next Block ID: {nextBlockId}, Status: {(status == 1 ? "Used" : "Free")}");
+                }
+            }
+
+            IOController.PrintLine($"Next Available Block ID: {_nextAvailableBlockId}");
         }
 
         private void SaveBlockInContainer(uint parentId, uint blockId)
@@ -1315,13 +1357,8 @@ namespace FileSystem.Engine.FileSystemEngine
 
             _containerStream.Seek(blockOffset + BlockInfo.GetSizeWithoutChecksum() + additionalStreamOffset, SeekOrigin.Begin);
 
-            // Write the data
             _containerStream.Write(data, offset, length);
 
-            // Update the block's content length in the header
-            UpdateBlockContentLenght(blockId, (uint)length);
-
-            // Update the block's checksum
             WriteBlockChecksum(blockId);
         }
     }
