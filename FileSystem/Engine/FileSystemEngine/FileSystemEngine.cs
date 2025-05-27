@@ -124,8 +124,6 @@ namespace FileSystem.Engine.FileSystemEngine
                 AddElementAsChild(_currentDir.FirstBlockId, fileEntry.FirstBlockId);
 
                 _currentDir = originalCurrent;
-
-                PrintAllocatedBlocks();
             }
             catch (Exception)
             {
@@ -1056,7 +1054,6 @@ namespace FileSystem.Engine.FileSystemEngine
             WriteBlockChecksum(folder.FirstBlockId);
         }
 
-        //TODO when writting content to the block we must use addition. Not only content lenght but also the system block info
         private void UpdateBlockContentLenght(uint firstBlockId, uint bitesWritten)
         {
             long blockOffset = CalculateBlockOffset(firstBlockId);
@@ -1089,38 +1086,6 @@ namespace FileSystem.Engine.FileSystemEngine
             }
 
             return firstId;
-        }
-
-        //TODO debug method. Remove
-        public void PrintAllocatedBlocks()
-        {
-
-            IOController.PrintLine("Block Chain Information:");
-
-            // Start from block ID 1 (as IDs start at 1)
-            for (uint blockId = 1; blockId < _nextAvailableBlockId; blockId++)
-            {
-                long blockOffset = CalculateBlockOffset(blockId);
-
-                // Read block ID and next block ID directly from the container
-                _containerStream.Seek(blockOffset, SeekOrigin.Begin);
-
-                using (BinaryReader reader = new BinaryReader(_containerStream, Encoding.UTF8, true))
-                {
-                    // Read the stored block ID
-                    uint storedBlockId = reader.ReadUInt32();
-
-                    // Read status (1 byte)
-                    byte status = reader.ReadByte();
-
-                    // Read next block ID
-                    uint nextBlockId = reader.ReadUInt32();
-                        
-                    IOController.PrintLine($"Block ID: {storedBlockId}, Next Block ID: {nextBlockId}, Status: {(status == 1 ? "Used" : "Free")}");
-                }
-            }
-
-            IOController.PrintLine($"Next Available Block ID: {_nextAvailableBlockId}");
         }
 
         private void SaveBlockInContainer(uint parentId, uint blockId)

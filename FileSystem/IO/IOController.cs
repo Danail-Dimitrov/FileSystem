@@ -15,7 +15,7 @@
             Console.WriteLine("  cpin <source> <destination> - Copy file into container");
             Console.WriteLine("  cpout <source> <destination> - Copy file from container");
             Console.WriteLine("  ls - List container contents");
-            Console.WriteLine("  rm <name> - Remove file or directory");
+            Console.WriteLine("  rm <name> - Remove file");
             Console.WriteLine("  md <name> - Create directory");
             Console.WriteLine("  cd <path> - Change directory");
             Console.WriteLine("  rd <name> - Remove directory");
